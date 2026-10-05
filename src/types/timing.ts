@@ -1,4 +1,4 @@
-export type Session = {
+export type Rt004Session = {
   id: string;
   started_at: string;
   finished_at: string | null;
@@ -6,9 +6,10 @@ export type Session = {
   device_address: string | null;
   test_name: string | null;
   notes: string | null;
+  created_at: string;
 };
 
-export type Lap = {
+export type Rt004Lap = {
   id: number;
   session_id: string;
   lap_number: number;
@@ -21,4 +22,5 @@ export type Lap = {
   counter_end: number | null;
   counter_delta: number | null;
   source: string;
+  created_at: string;
 };
