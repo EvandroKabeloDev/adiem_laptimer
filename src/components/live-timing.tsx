@@ -18,6 +18,7 @@ function formatClock(date: string | null | undefined) {
   if (!date) return "--:--:--";
 
   return new Date(date).toLocaleTimeString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -28,6 +29,7 @@ function formatDateTime(date: string | null | undefined) {
   if (!date) return "--/--/---- --:--:--";
 
   return new Date(date).toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -534,179 +536,6 @@ export default function LiveTiming() {
               </table>
             </div>
 
-            {/* =========================================================
-                MOBILE
-                Cards próprios. Não dependemos mais da transformação
-                CSS da tabela.
-               ========================================================= */}
-
-            <div className="mobile-laps-view">
-              {laps.length === 0 ? (
-                <div className="mobile-empty-state">
-                  <div className="mobile-empty-icon">
-                    ⚑
-                  </div>
-
-                  <div className="mobile-empty-title">
-                    Aguardando primeira passagem
-                  </div>
-
-                  <div className="mobile-empty-text">
-                    Assim que o RT004 detectar uma
-                    passagem, a volta aparecerá aqui.
-                  </div>
-                </div>
-              ) : (
-                [...laps]
-                  .reverse()
-                  .map((lap) => {
-                    const previous =
-                      previousLap(
-                        lap.lap_number,
-                      );
-
-                    const diffBest = bestLap
-                      ? lap.lap_time_ms -
-                        bestLap.lap_time_ms
-                      : 0;
-
-                    const diffPrevious =
-                      previous
-                        ? lap.lap_time_ms -
-                          previous.lap_time_ms
-                        : null;
-
-                    const isBest =
-                      lap.id === bestLap?.id;
-
-                    return (
-                      <article
-                        key={`mobile-${lap.id}`}
-                        className={
-                          isBest
-                            ? "mobile-lap-card mobile-best-card"
-                            : "mobile-lap-card"
-                        }
-                      >
-                        <div className="mobile-lap-header">
-                          <div>
-                            <span className="mobile-lap-label">
-                              VOLTA
-                            </span>
-
-                            <span className="mobile-lap-number">
-                              #{lap.lap_number}
-                            </span>
-                          </div>
-
-                          {isBest && (
-                            <span className="mobile-best-badge">
-                              MELHOR
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="mobile-lap-main">
-                          <span className="mobile-main-label">
-                            Tempo da volta
-                          </span>
-
-                          <strong
-                            className={
-                              isBest
-                                ? "mobile-main-time mobile-main-time-best"
-                                : "mobile-main-time"
-                            }
-                          >
-                            {formatLapTime(
-                              lap.lap_time_ms,
-                            )}
-                          </strong>
-                        </div>
-
-                        <div className="mobile-lap-grid">
-                          <div className="mobile-lap-info">
-                            <span>
-                              Dif. melhor
-                            </span>
-
-                            <strong
-                              className={
-                                diffBest > 0
-                                  ? "mobile-negative"
-                                  : "mobile-neutral"
-                              }
-                            >
-                              {diffBest === 0
-                                ? "-"
-                                : `+${(
-                                    diffBest /
-                                    1000
-                                  ).toFixed(3)}`}
-                            </strong>
-                          </div>
-
-                          <div className="mobile-lap-info">
-                            <span>
-                              Dif. anterior
-                            </span>
-
-                            <strong
-                              className={
-                                diffPrevious == null
-                                  ? "mobile-neutral"
-                                  : diffPrevious > 0
-                                    ? "mobile-negative"
-                                    : "mobile-positive"
-                              }
-                            >
-                              {diffPrevious == null
-                                ? "-"
-                                : diffPrevious === 0
-                                  ? "0.000"
-                                  : `${
-                                      diffPrevious >
-                                      0
-                                        ? "+"
-                                        : ""
-                                    }${(
-                                      diffPrevious /
-                                      1000
-                                    ).toFixed(3)}`}
-                            </strong>
-                          </div>
-
-                          <div className="mobile-lap-info">
-                            <span>
-                              Contador
-                            </span>
-
-                            <strong>
-                              {lap.counter_delta
-                                ? lap.counter_delta.toLocaleString(
-                                    "pt-BR",
-                                  )
-                                : "--"}
-                            </strong>
-                          </div>
-
-                          <div className="mobile-lap-info">
-                            <span>
-                              Hora da passagem
-                            </span>
-
-                            <strong>
-                              {formatClock(
-                                lap.end_at,
-                              )}
-                            </strong>
-                          </div>
-                        </div>
-                      </article>
-                    );
-                  })
-              )}
-            </div>
           </section>
         </section>
       </section>
