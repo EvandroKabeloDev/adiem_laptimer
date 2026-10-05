@@ -376,7 +376,7 @@ export default function LiveTiming() {
                           key={lap.id}
                           className={isBest ? "best-row" : ""}
                         >
-                          <td className="lap-number">
+                          <td className="lap-number" data-label="Volta">
                             {lap.lap_number}
                           </td>
 
