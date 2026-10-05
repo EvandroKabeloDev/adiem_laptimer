@@ -227,16 +227,6 @@ button {
   overflow: hidden;
 }
 
-.connection-panel::after {
-  content: "";
-  position: absolute;
-  right: -35px;
-  top: 25px;
-  width: 100px;
-  height: 230px;
-  border-left: 2px solid rgba(32, 223, 130, 0.3);
-  transform: skewY(-12deg);
-}
 
 /* =========================================================
    PANEL HEADERS
@@ -454,6 +444,15 @@ button {
 
 .table-wrapper {
   overflow-x: auto;
+}
+
+/*
+ * A mesma tabela é usada em todos os tamanhos.
+ * No desktop ela aparece como tabela.
+ * No mobile o CSS transforma as linhas em cartões.
+ */
+.desktop-laps-view {
+  display: block;
 }
 
 .lap-table {
@@ -677,8 +676,17 @@ button {
   }
 
   /*
-   * No celular, a tabela vira uma lista de cartões.
+   * No celular, a mesma tabela vira uma lista de cartões.
+   * Não existe uma segunda lista React para evitar duplicação.
    */
+  .desktop-laps-view {
+    display: block;
+  }
+
+  .mobile-laps-view {
+    display: none !important;
+  }
+
   .table-wrapper {
     overflow: visible;
   }
