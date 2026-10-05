@@ -2,11 +2,19 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LapWiz RT004 | Live Timing",
-  description: "LapWiz RT004 racing live timing MVP",
+  title: "ADIEM | Racing Live Timing",
+  description:
+    "ADIEM — Associação de Desenvolvimento e Incentivo de Esporte a Motor. Racing Live Timing.",
+  icons: {
+    icon: "/adiem-icon.png",
+  },
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="pt-BR">
       <body>{children}</body>
