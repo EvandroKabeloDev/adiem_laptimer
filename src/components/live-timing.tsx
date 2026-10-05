@@ -1,234 +1,487 @@
- "use client";
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, Gauge, Radio, Timer, Trophy, Wifi, WifiOff, Zap } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import type { Lap, Session } from "@/types/timing";
+import type { Rt004Lap, Rt004Session } from "@/types/timing";
 
-const POLL_MS = 2000;
-const CLOCK_MS = 50;
+function formatLapTime(ms: number | null | undefined) {
+  if (ms == null) return "--:---";
 
-function formatLap(ms: number | null | undefined) {
-  if (ms == null || !Number.isFinite(ms)) return "--.---";
-  return `${(ms / 1000).toFixed(3)} s`;
+  const totalSeconds = ms / 1000;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds - minutes * 60;
+
+  return `${minutes}:${seconds.toFixed(3).padStart(6, "0")}`;
 }
 
-function formatClock(ms: number) {
-  const safe = Math.max(0, ms);
-  const minutes = Math.floor(safe / 60000);
-  const seconds = Math.floor((safe % 60000) / 1000);
-  const millis = safe % 1000;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
+function formatClock(date: string | null | undefined) {
+  if (!date) return "--:--:--";
+
+  return new Date(date).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
-function formatRelative(iso: string, sessionStart: string | null) {
-  if (!sessionStart) return "--";
-  const value = new Date(iso).getTime() - new Date(sessionStart).getTime();
-  return `${(value / 1000).toFixed(3)} s`;
+function formatDateTime(date: string | null | undefined) {
+  if (!date) return "--/--/---- --:--:--";
+
+  return new Date(date).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 }
 
-function consecutiveBest(laps: Lap[], count: number) {
-  if (laps.length < count) return null;
-  let best = Number.POSITIVE_INFINITY;
-  for (let i = 0; i <= laps.length - count; i++) {
-    let total = 0;
-    for (let j = 0; j < count; j++) total += laps[i + j].lap_time_ms;
-    best = Math.min(best, total);
+function formatDuration(ms: number) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+      2,
+      "0",
+    )}:${String(seconds).padStart(2, "0")}`;
   }
-  return Number.isFinite(best) ? best : null;
+
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(
+    2,
+    "0",
+  )}`;
+}
+
+function Icon({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <span className="dashboard-icon">{children}</span>;
 }
 
 export default function LiveTiming() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [laps, setLaps] = useState<Lap[]>([]);
+  const [session, setSession] = useState<Rt004Session | null>(null);
+  const [laps, setLaps] = useState<Rt004Lap[]>([]);
   const [now, setNow] = useState(Date.now());
-  const [connected, setConnected] = useState(false);
-  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [online, setOnline] = useState(false);
 
-  const loadLatest = useCallback(async () => {
-    const { data: latest, error: sessionError } = await supabase
+  async function loadData() {
+    const { data: sessionData } = await supabase
       .from("rt004_sessions")
       .select("*")
       .order("started_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (sessionError || !latest) {
-      setConnected(false);
+    if (!sessionData) {
+      setSession(null);
+      setLaps([]);
+      setOnline(false);
       return;
     }
 
-    setSession(latest as Session);
+    setSession(sessionData as Rt004Session);
 
-    const { data: lapRows, error: lapError } = await supabase
+    const { data: lapData } = await supabase
       .from("rt004_laps")
       .select("*")
-      .eq("session_id", latest.id)
+      .eq("session_id", sessionData.id)
       .order("lap_number", { ascending: true });
 
-    if (lapError) {
-      setConnected(false);
-      return;
-    }
-
-    setLaps((lapRows ?? []) as Lap[]);
-    setConnected(true);
-    setLastSync(new Date());
-  }, []);
+    setLaps((lapData ?? []) as Rt004Lap[]);
+    setOnline(true);
+    setLastUpdate(new Date());
+  }
 
   useEffect(() => {
-    void loadLatest();
-    const interval = window.setInterval(() => void loadLatest(), POLL_MS);
-    return () => window.clearInterval(interval);
-  }, [loadLatest]);
+    loadData();
 
-  useEffect(() => {
+    const polling = window.setInterval(() => {
+      loadData();
+    }, 2000);
+
     const channel = supabase
-      .channel("rt004-live-laps")
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "rt004_laps",
-      }, (payload) => {
-        const lap = payload.new as Lap;
-        setLaps((current) => {
-          if (current.some((item) => item.id === lap.id)) return current;
-          return [...current, lap].sort((a, b) => a.lap_number - b.lap_number);
-        });
-        setLastSync(new Date());
-        setConnected(true);
-      })
+      .channel("adiem-live-timing")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "rt004_laps",
+        },
+        (payload) => {
+          const newLap = payload.new as Rt004Lap;
+
+          setLaps((current) => {
+            if (current.some((lap) => lap.id === newLap.id)) {
+              return current;
+            }
+
+            return [...current, newLap].sort(
+              (a, b) => a.lap_number - b.lap_number,
+            );
+          });
+
+          setOnline(true);
+          setLastUpdate(new Date());
+        },
+      )
       .subscribe((status) => {
-        if (status === "SUBSCRIBED") setConnected(true);
+        if (status === "SUBSCRIBED") {
+          setOnline(true);
+        }
       });
 
-    return () => { void supabase.removeChannel(channel); };
+    return () => {
+      window.clearInterval(polling);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), CLOCK_MS);
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 50);
+
     return () => window.clearInterval(timer);
   }, []);
 
-  const lastLap = laps[laps.length - 1] ?? null;
-  const currentLapNumber = lastLap ? lastLap.lap_number + 1 : 1;
-  const currentLapMs = lastLap ? Math.max(0, now - new Date(lastLap.end_at).getTime()) : 0;
+  const bestLap = useMemo(() => {
+    if (!laps.length) return null;
 
-  const bestLap = useMemo(() => laps.length ? Math.min(...laps.map(l => l.lap_time_ms)) : null, [laps]);
-  const average = useMemo(() => laps.length ? laps.reduce((s, l) => s + l.lap_time_ms, 0) / laps.length : null, [laps]);
-  const best2 = useMemo(() => consecutiveBest(laps, 2), [laps]);
-  const best3 = useMemo(() => consecutiveBest(laps, 3), [laps]);
+    return laps.reduce((best, lap) =>
+      lap.lap_time_ms < best.lap_time_ms ? lap : best,
+    );
+  }, [laps]);
+
+  const lastLap = laps.length ? laps[laps.length - 1] : null;
+
+  const averageLap = useMemo(() => {
+    if (!laps.length) return null;
+
+    return (
+      laps.reduce((sum, lap) => sum + lap.lap_time_ms, 0) / laps.length
+    );
+  }, [laps]);
+
+  const currentLapNumber = lastLap ? lastLap.lap_number + 1 : 1;
+
+  const currentLapMs = lastLap
+    ? Math.max(0, now - new Date(lastLap.end_at).getTime())
+    : 0;
+
+  const sessionDuration = session
+    ? now - new Date(session.started_at).getTime()
+    : 0;
+
+  const previousLap = (lapNumber: number) =>
+    laps.find((lap) => lap.lap_number === lapNumber - 1);
 
   return (
-    <main className="racer-grid min-h-screen">
-      <header className="sticky top-0 z-20 border-b border-[#26313d] bg-[#080b0f]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1500px] items-center justify-between px-5 py-4 lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#26313d] bg-[#111821] text-[var(--green)]"><Zap size={19} /></div>
-            <div>
-              <h1 className="text-lg font-black tracking-tight sm:text-xl">LAPWIZ <span className="text-[var(--green)]">RT004</span></h1>
-              <p className="text-[10px] font-bold uppercase tracking-[.22em] text-[#687582]">Racing Live Timing</p>
+    <main className="timing-page">
+      <header className="top-header">
+        <div className="brand-area">
+          <img
+            src="/adiem-icon.png"
+            alt="ADIEM"
+            className="adiem-logo"
+          />
+
+          <div className="brand-text">
+            <div className="brand-name">ADIEM</div>
+            <div className="brand-subtitle">
+              Associação de Desenvolvimento e Incentivo de Esporte a Motor
             </div>
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-[#26313d] bg-[#0d1117] px-3 py-2 text-xs font-bold">
-            {connected ? <Wifi size={14} className="text-[var(--green)]" /> : <WifiOff size={14} className="text-[var(--red)]" />}
-            <span className={connected ? "text-[var(--green)]" : "text-[var(--red)]"}>{connected ? "LIVE" : "OFFLINE"}</span>
+
+          <div className="brand-divider" />
+
+          <div className="product-name">
+            <span>Racing</span> Live Timing
           </div>
+        </div>
+
+        <div className="realtime-badge">
+          <span className={online ? "status-dot online" : "status-dot"} />
+          <span>{online ? "Tempo Real" : "Offline"}</span>
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
-        <div className="mb-5 rounded-xl border border-[#5b4b17] bg-[#1b170b] px-4 py-3 text-xs text-[#e8c85c]">
-          <div className="font-black uppercase tracking-[.12em]">Modo experimental</div>
-          <div className="mt-1 text-[#b9a451]">Type 02 está sendo utilizado como referência de passagem e sua interpretação continua em validação.</div>
-        </div>
+      <section className="dashboard-grid">
+        <aside className="sidebar">
+          <section className="panel connection-panel">
+            <div className="panel-title-row">
+              <div className="panel-title">
+                <Icon>⌁</Icon>
+                Conexão RT004
+              </div>
 
-        <section className="scanline glow-green relative overflow-hidden rounded-2xl border border-[#26313d] bg-[#0d1117] p-5 sm:p-7">
-          <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-[rgba(53,242,138,.05)] blur-3xl" />
-          <div className="relative grid gap-8 lg:grid-cols-[1fr_auto]">
-            <div>
-              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[.18em] text-[#71808d]"><Radio size={14} />Live timing</div>
-              <div className="mt-3 flex flex-wrap items-end gap-4">
-                <div>
-                  <div className="text-4xl font-black tracking-tight">KART 01</div>
-                  <div className="mt-1 text-sm text-[#7d8996]">Piloto não cadastrado</div>
-                </div>
-                <div className="rounded-lg border border-[#26313d] bg-[#080b0f] px-3 py-2">
-                  <div className="text-[10px] font-bold uppercase tracking-[.16em] text-[#687582]">RT004</div>
-                  <div className="mono mt-1 text-xs text-[#b8c2cc]">{session?.device_name ?? "Aguardando..."}</div>
-                </div>
+              <span className={online ? "connected-pill" : "offline-pill"}>
+                {online ? "Conectado" : "Offline"}
+              </span>
+            </div>
+
+            <div className="connection-icon">◉</div>
+
+            <InfoRow
+              label="Dispositivo"
+              value={session?.device_name || "LapWiz-7DBE"}
+            />
+
+            <InfoRow
+              label="Endereço BLE"
+              value={session?.device_address || "--"}
+            />
+
+            <InfoRow
+              label="Status"
+              value={online ? "Recebendo dados" : "Aguardando dados"}
+            />
+
+            <InfoRow
+              label="Última atualização"
+              value={
+                lastUpdate
+                  ? `${Math.max(
+                      0,
+                      (Date.now() - lastUpdate.getTime()) / 1000,
+                    ).toFixed(1)} s`
+                  : "--"
+              }
+            />
+
+            <InfoRow
+              label="Voltas recebidas"
+              value={String(laps.length)}
+            />
+          </section>
+
+          <section className="panel session-panel">
+            <div className="panel-title">
+              <Icon>◷</Icon>
+              Sessão Atual
+            </div>
+
+            <InfoRow
+              label="Início"
+              value={formatDateTime(session?.started_at)}
+            />
+
+            <InfoRow
+              label="Duração"
+              value={session ? formatDuration(sessionDuration) : "--:--"}
+            />
+
+            <InfoRow label="Passagens" value={String(laps.length + 1)} />
+
+            <InfoRow
+              label="Voltas completas"
+              value={String(laps.length)}
+            />
+
+            <button className="stop-button" type="button">
+              <span>■</span>
+              Encerrar Sessão
+            </button>
+          </section>
+        </aside>
+
+        <section className="main-area">
+          <div className="stats-grid">
+            <StatCard
+              icon="◷"
+              label="Melhor Volta"
+              value={formatLapTime(bestLap?.lap_time_ms)}
+              detail={bestLap ? `#${bestLap.lap_number}` : "--"}
+              highlight
+            />
+
+            <StatCard
+              icon="⚑"
+              label="Última Volta"
+              value={formatLapTime(lastLap?.lap_time_ms)}
+              detail={lastLap ? `#${lastLap.lap_number}` : "--"}
+            />
+
+            <StatCard
+              icon="♧"
+              label="Volta Atual"
+              value={formatLapTime(currentLapMs)}
+              detail={`#${currentLapNumber}`}
+            />
+
+            <StatCard
+              icon="◉"
+              label="Média"
+              value={formatLapTime(averageLap)}
+              detail={`${laps.length} voltas`}
+            />
+          </div>
+
+          <section className="panel laps-panel">
+            <div className="laps-header">
+              <div className="laps-title">
+                <span className="flag-icon">⚑</span>
+                <span>Voltas em Tempo Real</span>
+              </div>
+
+              <div className="live-indicator">
+                <span className="status-dot online" />
+                Atualizando automaticamente
               </div>
             </div>
 
-            <div className="min-w-[270px] text-left lg:text-right">
-              <div className="text-[11px] font-black uppercase tracking-[.18em] text-[#71808d]">Volta atual</div>
-              <div className="mt-1 text-3xl font-black text-[var(--green)]">#{currentLapNumber}</div>
-              <div className="live-clock mt-1 text-5xl font-black text-white sm:text-6xl">{formatClock(currentLapMs)}</div>
-              <div className="mt-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[.14em] text-[var(--green)] lg:justify-end"><Activity size={13} />Em pista</div>
-            </div>
-          </div>
+            <div className="table-wrapper">
+              <table className="lap-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Tempo da Volta</th>
+                    <th>Dif. Melhor</th>
+                    <th>Dif. Anterior</th>
+                    <th>Contador</th>
+                    <th>Hora da Passagem</th>
+                  </tr>
+                </thead>
 
-          <div className="relative mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Metric label="Última volta" value={formatLap(lastLap?.lap_time_ms)} accent="green" />
-            <Metric label="Melhor volta" value={formatLap(bestLap)} accent="cyan" />
-            <Metric label="Média" value={formatLap(average)} />
-            <Metric label="Voltas" value={String(laps.length)} />
-          </div>
-        </section>
-
-        <section className="mt-5 overflow-hidden rounded-2xl border border-[#26313d] bg-[#0d1117]">
-          <SectionHeader icon={<Timer size={16} />} title="Histórico de voltas" />
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-left">
-              <thead className="border-b border-[#26313d] bg-[#0a0e13] text-[10px] uppercase tracking-[.14em] text-[#687582]">
-                <tr><th className="px-4 py-3">Volta</th><th className="px-4 py-3">Timestamp</th><th className="px-4 py-3">Lap time</th><th className="px-4 py-3">Δ contador</th><th className="px-4 py-3">Contador inicial</th><th className="px-4 py-3">Contador final</th></tr>
-              </thead>
-              <tbody>
-                {[...laps].reverse().map((lap) => {
-                  const best = lap.lap_time_ms === bestLap;
-                  return (
-                    <tr key={lap.id} className="border-b border-[#1b232c] last:border-0">
-                      <td className="px-4 py-3 font-black">{lap.lap_number}</td>
-                      <td className="mono px-4 py-3 text-xs text-[#9ba7b2]">{formatRelative(lap.end_at, session?.started_at ?? null)}</td>
-                      <td className={`px-4 py-3 font-black ${best ? "text-[var(--green)]" : ""}`}>{formatLap(lap.lap_time_ms)} {best ? "★" : ""}</td>
-                      <td className="mono px-4 py-3 text-xs">{lap.counter_delta?.toLocaleString("pt-BR") ?? "--"}</td>
-                      <td className="mono px-4 py-3 text-xs text-[#71808d]">{lap.counter_start?.toLocaleString("pt-BR") ?? "--"}</td>
-                      <td className="mono px-4 py-3 text-xs text-[#71808d]">{lap.counter_end?.toLocaleString("pt-BR") ?? "--"}</td>
+                <tbody>
+                  {laps.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="empty-state">
+                        Aguardando primeira passagem...
+                      </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          {!laps.length && <div className="px-6 py-12 text-center text-sm text-[#71808d]">Aguardando a primeira volta...</div>}
+                  ) : (
+                    [...laps].reverse().map((lap) => {
+                      const previous = previousLap(lap.lap_number);
+
+                      const diffBest = bestLap
+                        ? lap.lap_time_ms - bestLap.lap_time_ms
+                        : 0;
+
+                      const diffPrevious = previous
+                        ? lap.lap_time_ms - previous.lap_time_ms
+                        : null;
+
+                      const isBest = lap.id === bestLap?.id;
+
+                      return (
+                        <tr
+                          key={lap.id}
+                          className={isBest ? "best-row" : ""}
+                        >
+                          <td className="lap-number">
+                            {lap.lap_number}
+                          </td>
+
+                          <td
+                            className={
+                              isBest
+                                ? "lap-time best-time"
+                                : "lap-time"
+                            }
+                          >
+                            {formatLapTime(lap.lap_time_ms)}
+                          </td>
+
+                          <td
+                            className={
+                              diffBest > 0
+                                ? "delta negative"
+                                : "delta neutral"
+                            }
+                          >
+                            {diffBest === 0
+                              ? "-"
+                              : `+${(diffBest / 1000).toFixed(3)}`}
+                          </td>
+
+                          <td
+                            className={
+                              diffPrevious == null
+                                ? "delta neutral"
+                                : diffPrevious > 0
+                                  ? "delta negative"
+                                  : "delta positive"
+                            }
+                          >
+                            {diffPrevious == null
+                              ? "-"
+                              : diffPrevious === 0
+                                ? "0.000"
+                                : `${diffPrevious > 0 ? "+" : ""}${(
+                                    diffPrevious / 1000
+                                  ).toFixed(3)}`}
+                          </td>
+
+                          <td className="counter-cell">
+                            {lap.counter_delta
+                              ? lap.counter_delta.toLocaleString("pt-BR")
+                              : "--"}
+                          </td>
+
+                          <td>{formatClock(lap.end_at)}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </section>
-
-        <div className="mt-5 grid gap-5 lg:grid-cols-2">
-          <section className="overflow-hidden rounded-2xl border border-[#26313d] bg-[#0d1117]">
-            <SectionHeader icon={<Trophy size={16} />} title="Performance" />
-            <div className="grid grid-cols-3 divide-x divide-[#26313d]"><Stat label="Melhor volta" value={formatLap(bestLap)} /><Stat label="2 consecutivas" value={formatLap(best2)} /><Stat label="3 consecutivas" value={formatLap(best3)} /></div>
-          </section>
-          <section className="overflow-hidden rounded-2xl border border-[#26313d] bg-[#0d1117]">
-            <SectionHeader icon={<Gauge size={16} />} title="Sistema" />
-            <div className="grid grid-cols-2 divide-x divide-[#26313d]"><Stat label="Sessão" value={session?.id?.slice(0, 8) ?? "--"} mono /><Stat label="Última sincronização" value={lastSync ? lastSync.toLocaleTimeString("pt-BR") : "--"} mono /></div>
-          </section>
-        </div>
-
-        <footer className="py-7 text-center text-[10px] font-bold uppercase tracking-[.18em] text-[#4e5a66]">LapWiz RT004 • Experimental timing platform • MVP</footer>
-      </div>
+      </section>
     </main>
   );
 }
 
-function Metric({ label, value, accent }: { label: string; value: string; accent?: "green" | "cyan" }) {
-  const color = accent === "green" ? "text-[var(--green)]" : accent === "cyan" ? "text-[var(--cyan)]" : "text-white";
-  return <div className="rounded-xl border border-[#26313d] bg-[#080b0f] p-4"><div className="text-[10px] font-black uppercase tracking-[.15em] text-[#687582]">{label}</div><div className={`mono mt-2 text-2xl font-black ${color}`}>{value}</div></div>;
+function InfoRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="info-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
 }
 
-function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
-  return <div className="flex items-center gap-2 border-b border-[#26313d] px-5 py-4 text-sm font-black"><span className="text-[var(--green)]">{icon}</span>{title}</div>;
-}
+function StatCard({
+  icon,
+  label,
+  value,
+  detail,
+  highlight = false,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+  detail: string;
+  highlight?: boolean;
+}) {
+  return (
+    <article className="stat-card">
+      <div className="stat-icon">{icon}</div>
 
-function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return <div className="p-5"><div className="text-[10px] font-black uppercase tracking-[.14em] text-[#687582]">{label}</div><div className={`mt-2 text-sm font-black ${mono ? "mono" : ""}`}>{value}</div></div>;
+      <div className="stat-content">
+        <div className="stat-label">{label}</div>
+
+        <div className={highlight ? "stat-value highlight" : "stat-value"}>
+          {value}
+        </div>
+
+        <div className="stat-detail">{detail}</div>
+      </div>
+    </article>
+  );
 }
