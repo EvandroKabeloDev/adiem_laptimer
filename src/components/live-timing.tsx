@@ -381,6 +381,7 @@ export default function LiveTiming() {
                           </td>
 
                           <td
+                            data-label="Tempo da volta"
                             className={
                               isBest
                                 ? "lap-time best-time"
