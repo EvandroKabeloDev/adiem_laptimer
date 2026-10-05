@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #06080b;
+  --panel: #0d1117;
+  --line: #26313d;
+  --muted: #7d8996;
+  --text: #edf2f7;
+  --green: #35f28a;
+  --cyan: #46c8ff;
+  --amber: #ffc857;
+  --red: #ff5f56;
+}
+
+* { box-sizing: border-box; }
+
+html, body { min-height: 100%; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 78% 8%, rgba(70,200,255,.09), transparent 28rem),
+    radial-gradient(circle at 18% 0%, rgba(53,242,138,.055), transparent 24rem),
+    var(--bg);
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+::selection { background: rgba(53,242,138,.28); }
+
+.racer-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+.scanline::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(transparent 49%, rgba(255,255,255,.018) 50%, transparent 51%);
+  background-size: 100% 5px;
+  opacity: .18;
+}
+
+.glow-green { box-shadow: 0 0 28px rgba(53,242,138,.10); }
+
+.live-clock {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.04em;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
