@@ -227,6 +227,17 @@ button {
   overflow: hidden;
 }
 
+.connection-panel::after {
+  content: "";
+  position: absolute;
+  right: -35px;
+  top: 25px;
+  width: 100px;
+  height: 230px;
+  border-left: 2px solid rgba(32, 223, 130, 0.3);
+  transform: skewY(-12deg);
+}
+
 /* =========================================================
    PANEL HEADERS
    ========================================================= */
