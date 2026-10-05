@@ -698,6 +698,17 @@ button {
   .lap-table td {
     display: block;
     width: 100%;
+    min-width: 0;
+  }
+
+  /*
+   * O desktop usa min-width: 760px para manter a tabela legível.
+   * No celular isso fazia os valores ficarem fora da área visível,
+   * enquanto os rótulos continuavam aparecendo.
+   */
+  .lap-table {
+    min-width: 0;
+    width: 100%;
   }
 
   .lap-table thead {
