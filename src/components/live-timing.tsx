@@ -195,6 +195,7 @@ export default function LiveTiming() {
 
           <div className="brand-text">
             <div className="brand-name">ADIEM</div>
+
             <div className="brand-subtitle">
               Associação de Desenvolvimento e Incentivo de Esporte a Motor
             </div>
@@ -208,8 +209,15 @@ export default function LiveTiming() {
         </div>
 
         <div className="realtime-badge">
-          <span className={online ? "status-dot online" : "status-dot"} />
-          <span>{online ? "Tempo Real" : "Offline"}</span>
+          <span
+            className={
+              online ? "status-dot online" : "status-dot"
+            }
+          />
+
+          <span>
+            {online ? "Tempo Real" : "Offline"}
+          </span>
         </div>
       </header>
 
@@ -222,7 +230,13 @@ export default function LiveTiming() {
                 Conexão RT004
               </div>
 
-              <span className={online ? "connected-pill" : "offline-pill"}>
+              <span
+                className={
+                  online
+                    ? "connected-pill"
+                    : "offline-pill"
+                }
+              >
                 {online ? "Conectado" : "Offline"}
               </span>
             </div>
@@ -231,17 +245,25 @@ export default function LiveTiming() {
 
             <InfoRow
               label="Dispositivo"
-              value={session?.device_name || "LapWiz-7DBE"}
+              value={
+                session?.device_name || "LapWiz-7DBE"
+              }
             />
 
             <InfoRow
               label="Endereço BLE"
-              value={session?.device_address || "--"}
+              value={
+                session?.device_address || "--"
+              }
             />
 
             <InfoRow
               label="Status"
-              value={online ? "Recebendo dados" : "Aguardando dados"}
+              value={
+                online
+                  ? "Recebendo dados"
+                  : "Aguardando dados"
+              }
             />
 
             <InfoRow
@@ -250,7 +272,9 @@ export default function LiveTiming() {
                 lastUpdate
                   ? `${Math.max(
                       0,
-                      (Date.now() - lastUpdate.getTime()) / 1000,
+                      (Date.now() -
+                        lastUpdate.getTime()) /
+                        1000,
                     ).toFixed(1)} s`
                   : "--"
               }
@@ -270,22 +294,34 @@ export default function LiveTiming() {
 
             <InfoRow
               label="Início"
-              value={formatDateTime(session?.started_at)}
+              value={formatDateTime(
+                session?.started_at,
+              )}
             />
 
             <InfoRow
               label="Duração"
-              value={session ? formatDuration(sessionDuration) : "--:--"}
+              value={
+                session
+                  ? formatDuration(sessionDuration)
+                  : "--:--"
+              }
             />
 
-            <InfoRow label="Passagens" value={String(laps.length + 1)} />
+            <InfoRow
+              label="Passagens"
+              value={String(laps.length + 1)}
+            />
 
             <InfoRow
               label="Voltas completas"
               value={String(laps.length)}
             />
 
-            <button className="stop-button" type="button">
+            <button
+              className="stop-button"
+              type="button"
+            >
               <span>■</span>
               Encerrar Sessão
             </button>
@@ -297,16 +333,28 @@ export default function LiveTiming() {
             <StatCard
               icon="◷"
               label="Melhor Volta"
-              value={formatLapTime(bestLap?.lap_time_ms)}
-              detail={bestLap ? `#${bestLap.lap_number}` : "--"}
+              value={formatLapTime(
+                bestLap?.lap_time_ms,
+              )}
+              detail={
+                bestLap
+                  ? `#${bestLap.lap_number}`
+                  : "--"
+              }
               highlight
             />
 
             <StatCard
               icon="⚑"
               label="Última Volta"
-              value={formatLapTime(lastLap?.lap_time_ms)}
-              detail={lastLap ? `#${lastLap.lap_number}` : "--"}
+              value={formatLapTime(
+                lastLap?.lap_time_ms,
+              )}
+              detail={
+                lastLap
+                  ? `#${lastLap.lap_number}`
+                  : "--"
+              }
             />
 
             <StatCard
@@ -328,11 +376,15 @@ export default function LiveTiming() {
             <div className="laps-header">
               <div className="laps-title">
                 <span className="flag-icon">⚑</span>
-                <span>Voltas em Tempo Real</span>
+
+                <span>
+                  Voltas em Tempo Real
+                </span>
               </div>
 
               <div className="live-indicator">
                 <span className="status-dot online" />
+
                 Atualizando automaticamente
               </div>
             </div>
@@ -353,84 +405,123 @@ export default function LiveTiming() {
                 <tbody>
                   {laps.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="empty-state">
+                      <td
+                        colSpan={6}
+                        className="empty-state"
+                      >
                         Aguardando primeira passagem...
                       </td>
                     </tr>
                   ) : (
-                    [...laps].reverse().map((lap) => {
-                      const previous = previousLap(lap.lap_number);
+                    [...laps]
+                      .reverse()
+                      .map((lap) => {
+                        const previous =
+                          previousLap(
+                            lap.lap_number,
+                          );
 
-                      const diffBest = bestLap
-                        ? lap.lap_time_ms - bestLap.lap_time_ms
-                        : 0;
+                        const diffBest = bestLap
+                          ? lap.lap_time_ms -
+                            bestLap.lap_time_ms
+                          : 0;
 
-                      const diffPrevious = previous
-                        ? lap.lap_time_ms - previous.lap_time_ms
-                        : null;
+                        const diffPrevious =
+                          previous
+                            ? lap.lap_time_ms -
+                              previous.lap_time_ms
+                            : null;
 
-                      const isBest = lap.id === bestLap?.id;
+                        const isBest =
+                          lap.id === bestLap?.id;
 
-                      return (
-                        <tr
-                          key={lap.id}
-                          className={isBest ? "best-row" : ""}
-                        >
-                          <td className="lap-number" data-label="Volta">
-                            {lap.lap_number}
-                          </td>
-
-                          <td
-                            data-label="Tempo da volta"
+                        return (
+                          <tr
+                            key={lap.id}
                             className={
                               isBest
-                                ? "lap-time best-time"
-                                : "lap-time"
+                                ? "best-row"
+                                : ""
                             }
                           >
-                            {formatLapTime(lap.lap_time_ms)}
-                          </td>
+                            <td
+                              className="lap-number"
+                              data-label="Volta"
+                            >
+                              {lap.lap_number}
+                            </td>
 
-                          <td
-                            className={
-                              diffBest > 0
-                                ? "delta negative"
-                                : "delta neutral"
-                            }
-                          >
-                            {diffBest === 0
-                              ? "-"
-                              : `+${(diffBest / 1000).toFixed(3)}`}
-                          </td>
+                            <td
+                              data-label="Tempo da volta"
+                              className={
+                                isBest
+                                  ? "lap-time best-time"
+                                  : "lap-time"
+                              }
+                            >
+                              {formatLapTime(
+                                lap.lap_time_ms,
+                              )}
+                            </td>
 
-                          <td
-                            className={
-                              diffPrevious == null
-                                ? "delta neutral"
-                                : diffPrevious > 0
+                            <td
+                              data-label="Dif. melhor"
+                              className={
+                                diffBest > 0
                                   ? "delta negative"
-                                  : "delta positive"
-                            }
-                          >
-                            {diffPrevious == null
-                              ? "-"
-                              : diffPrevious === 0
-                                ? "0.000"
-                                : `${diffPrevious > 0 ? "+" : ""}${(
-                                    diffPrevious / 1000
+                                  : "delta neutral"
+                              }
+                            >
+                              {diffBest === 0
+                                ? "-"
+                                : `+${(
+                                    diffBest / 1000
                                   ).toFixed(3)}`}
-                          </td>
+                            </td>
 
-                          <td className="counter-cell">
-                            {lap.counter_delta
-                              ? lap.counter_delta.toLocaleString("pt-BR")
-                              : "--"}
-                          </td>
+                            <td
+                              data-label="Dif. anterior"
+                              className={
+                                diffPrevious == null
+                                  ? "delta neutral"
+                                  : diffPrevious > 0
+                                    ? "delta negative"
+                                    : "delta positive"
+                              }
+                            >
+                              {diffPrevious == null
+                                ? "-"
+                                : diffPrevious === 0
+                                  ? "0.000"
+                                  : `${
+                                      diffPrevious > 0
+                                        ? "+"
+                                        : ""
+                                    }${(
+                                      diffPrevious /
+                                      1000
+                                    ).toFixed(3)}`}
+                            </td>
 
-                          <td>{formatClock(lap.end_at)}</td>
-                        </tr>
-                      );
-                    })
+                            <td
+                              data-label="Contador"
+                              className="counter-cell"
+                            >
+                              {lap.counter_delta
+                                ? lap.counter_delta.toLocaleString(
+                                    "pt-BR",
+                                  )
+                                : "--"}
+                            </td>
+
+                            <td data-label="Hora da passagem">
+                              {formatClock(
+                                lap.end_at,
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
                   )}
                 </tbody>
               </table>
@@ -452,6 +543,7 @@ function InfoRow({
   return (
     <div className="info-row">
       <span>{label}</span>
+
       <strong>{value}</strong>
     </div>
   );
@@ -475,13 +567,23 @@ function StatCard({
       <div className="stat-icon">{icon}</div>
 
       <div className="stat-content">
-        <div className="stat-label">{label}</div>
+        <div className="stat-label">
+          {label}
+        </div>
 
-        <div className={highlight ? "stat-value highlight" : "stat-value"}>
+        <div
+          className={
+            highlight
+              ? "stat-value highlight"
+              : "stat-value"
+          }
+        >
           {value}
         </div>
 
-        <div className="stat-detail">{detail}</div>
+        <div className="stat-detail">
+          {detail}
+        </div>
       </div>
     </article>
   );
