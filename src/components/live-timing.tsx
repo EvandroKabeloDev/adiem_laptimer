@@ -455,7 +455,9 @@ export default function LiveTiming() {
                               className="lap-number"
                               data-label="Volta"
                             >
-                              {lap.lap_number}
+                              <span className="mobile-cell-value">
+                                {lap.lap_number}
+                              </span>
                             </td>
 
                             <td
@@ -466,9 +468,11 @@ export default function LiveTiming() {
                                   : "lap-time"
                               }
                             >
-                              {formatLapTime(
-                                lap.lap_time_ms,
-                              )}
+                              <span className="mobile-cell-value">
+                                {formatLapTime(
+                                  lap.lap_time_ms,
+                                )}
+                              </span>
                             </td>
 
                             <td
@@ -479,12 +483,14 @@ export default function LiveTiming() {
                                   : "delta neutral"
                               }
                             >
-                              {diffBest === 0
-                                ? "-"
-                                : `+${(
-                                    diffBest /
-                                    1000
-                                  ).toFixed(3)}`}
+                              <span className="mobile-cell-value">
+                                {diffBest === 0
+                                  ? "-"
+                                  : `+${(
+                                      diffBest /
+                                      1000
+                                    ).toFixed(3)}`}
+                              </span>
                             </td>
 
                             <td
@@ -497,36 +503,42 @@ export default function LiveTiming() {
                                     : "delta positive"
                               }
                             >
-                              {diffPrevious == null
-                                ? "-"
-                                : diffPrevious === 0
-                                  ? "0.000"
-                                  : `${
-                                      diffPrevious >
-                                      0
-                                        ? "+"
-                                        : ""
-                                    }${(
-                                      diffPrevious /
-                                      1000
-                                    ).toFixed(3)}`}
+                              <span className="mobile-cell-value">
+                                {diffPrevious == null
+                                  ? "-"
+                                  : diffPrevious === 0
+                                    ? "0.000"
+                                    : `${
+                                        diffPrevious >
+                                        0
+                                          ? "+"
+                                          : ""
+                                      }${(
+                                        diffPrevious /
+                                        1000
+                                      ).toFixed(3)}`}
+                              </span>
                             </td>
 
                             <td
                               data-label="Contador"
                               className="counter-cell"
                             >
-                              {lap.counter_delta
-                                ? lap.counter_delta.toLocaleString(
-                                    "pt-BR",
-                                  )
-                                : "--"}
+                              <span className="mobile-cell-value">
+                                {lap.counter_delta
+                                  ? lap.counter_delta.toLocaleString(
+                                      "pt-BR",
+                                    )
+                                  : "--"}
+                              </span>
                             </td>
 
                             <td data-label="Hora da passagem">
-                              {formatClock(
-                                lap.end_at,
-                              )}
+                              <span className="mobile-cell-value">
+                                {formatClock(
+                                  lap.end_at,
+                                )}
+                              </span>
                             </td>
                           </tr>
                         );
