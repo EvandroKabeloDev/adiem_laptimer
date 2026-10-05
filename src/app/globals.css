@@ -728,20 +728,60 @@ button {
   }
 
   .lap-table td {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: 15px;
+    gap: 14px;
     padding: 7px 0;
     border: 0;
     font-size: 13px;
+    min-width: 0;
   }
 
   .lap-table td::before {
     content: attr(data-label);
+    min-width: 0;
     color: #7f8a95;
     font-size: 11px;
     font-weight: 650;
+  }
+
+  .lap-table td .mobile-cell-value {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    color: #dce1e5;
+    font-size: 13px;
+    font-weight: 750;
+    line-height: 1.25;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .lap-table td.lap-time .mobile-cell-value {
+    color: #f5f7f9;
+    font-size: 18px;
+    font-weight: 850;
+  }
+
+  .lap-table td.best-time .mobile-cell-value {
+    color: var(--purple);
+  }
+
+  .lap-table td.delta.negative .mobile-cell-value {
+    color: #ff4b52;
+  }
+
+  .lap-table td.delta.positive .mobile-cell-value {
+    color: #28e184;
+  }
+
+  .lap-table td.delta.neutral .mobile-cell-value {
+    color: #84909b;
+  }
+
+  .lap-table td.counter-cell .mobile-cell-value {
+    color: #aeb7c0;
   }
 
   .lap-table td.lap-number {
@@ -756,6 +796,12 @@ button {
     content: "VOLTA";
     color: #aeb8c2;
     font-size: 11px;
+  }
+
+  .lap-table td.lap-number .mobile-cell-value {
+    color: #f4f6f8;
+    font-size: 17px;
+    font-weight: 850;
   }
 
   .lap-table td.lap-time {
@@ -844,6 +890,22 @@ button {
   .stat-detail {
     margin-top: 5px;
     font-size: 9px;
+  }
+
+  .lap-table td {
+    gap: 10px;
+  }
+
+  .lap-table td .mobile-cell-value {
+    font-size: 12px;
+  }
+
+  .lap-table td.lap-time .mobile-cell-value {
+    font-size: 18px;
+  }
+
+  .lap-table td.lap-number .mobile-cell-value {
+    font-size: 16px;
   }
 
   .panel-title {
