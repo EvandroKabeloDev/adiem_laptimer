@@ -92,8 +92,14 @@ button {
   pointer-events: none;
 
   background:
-    linear-gradient(135deg, transparent 45%, #fff 45%, #fff 50%, transparent 50%)
-      0 0 / 90px 90px;
+    linear-gradient(
+      135deg,
+      transparent 45%,
+      #fff 45%,
+      #fff 50%,
+      transparent 50%
+    )
+    0 0 / 90px 90px;
 }
 
 .brand-area {
@@ -539,6 +545,15 @@ button {
 }
 
 /* =========================================================
+   LAP VIEW SWITCHING
+   ========================================================= */
+
+/* Desktop e tablet usam somente a tabela. */
+.mobile-laps-view {
+  display: none;
+}
+
+/* =========================================================
    RESPONSIVE / TABLET
    ========================================================= */
 
@@ -677,92 +692,161 @@ button {
   }
 
   /*
-   * No celular, a tabela vira uma lista de cartões.
+   * No celular usamos somente os cards próprios.
+   * A tabela desktop fica completamente oculta.
    */
-  .table-wrapper {
-    overflow: visible;
-  }
-
-  .lap-table,
-  .lap-table thead,
-  .lap-table tbody,
-  .lap-table tr,
-  .lap-table td {
-    display: block;
-    width: 100%;
-  }
-
-  .lap-table thead {
+  .desktop-laps-view {
     display: none;
   }
 
-  .lap-table tbody {
+  .mobile-laps-view {
+    display: block;
     padding: 8px;
   }
 
-  .lap-table tr {
+  .mobile-lap-card {
     position: relative;
     margin-bottom: 10px;
-    padding: 12px 14px;
+    padding: 16px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 12px;
     background: #11171d;
   }
 
-  .lap-table tr.best-row {
+  .mobile-lap-card:last-child {
+    margin-bottom: 0;
+  }
+
+  .mobile-best-card {
     background:
       linear-gradient(
         135deg,
         rgba(16, 115, 65, 0.42),
         rgba(16, 80, 48, 0.16)
       );
-    border-color: rgba(32, 223, 130, 0.3);
+    border-color: rgba(32, 223, 130, 0.35);
   }
 
-  .lap-table td {
+  .mobile-lap-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    gap: 15px;
-    padding: 7px 0;
-    border: 0;
-    font-size: 13px;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+    margin-bottom: 13px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
-  .lap-table td::before {
-    content: attr(data-label);
+  .mobile-lap-label {
+    color: #aeb8c2;
+    font-size: 12px;
+    font-weight: 750;
+    margin-right: 7px;
+  }
+
+  .mobile-lap-number {
+    color: #f4f6f8;
+    font-size: 17px;
+    font-weight: 850;
+  }
+
+  .mobile-best-badge {
+    padding: 5px 8px;
+    border-radius: 6px;
+    color: #07130d;
+    background: var(--green);
+    font-size: 10px;
+    font-weight: 850;
+  }
+
+  .mobile-lap-main {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 15px;
+  }
+
+  .mobile-main-label {
+    color: #8e9aa7;
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  .mobile-main-time {
+    color: #f5f7f9;
+    font-size: 23px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+
+  .mobile-main-time-best {
+    color: var(--purple);
+    text-shadow: 0 0 18px rgba(197, 92, 255, 0.2);
+  }
+
+  .mobile-lap-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+  }
+
+  .mobile-lap-info {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .mobile-lap-info span {
     color: #7f8a95;
     font-size: 11px;
     font-weight: 650;
   }
 
-  .lap-table td.lap-number {
-    padding-bottom: 10px;
-    margin-bottom: 5px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-    color: white;
-    font-size: 16px;
+  .mobile-lap-info strong {
+    color: #dce1e5;
+    font-size: 13px;
+    font-weight: 750;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .lap-table td.lap-number::before {
-    content: "VOLTA";
-    color: #aeb8c2;
-    font-size: 11px;
+  .mobile-neutral {
+    color: #84909b !important;
   }
 
-  .lap-table td.lap-time {
-    font-size: 18px !important;
+  .mobile-negative {
+    color: #ff4b52 !important;
   }
 
-  .lap-table td.empty-state {
-    display: block;
-    height: auto;
-    padding: 45px 15px;
-    text-align: center !important;
+  .mobile-positive {
+    color: #28e184 !important;
   }
 
-  .lap-table td.empty-state::before {
-    display: none;
+  .mobile-empty-state {
+    padding: 45px 18px;
+    text-align: center;
+  }
+
+  .mobile-empty-icon {
+    margin-bottom: 10px;
+    color: #7f8993;
+    font-size: 30px;
+  }
+
+  .mobile-empty-title {
+    color: #cbd2d8;
+    font-size: 15px;
+    font-weight: 750;
+  }
+
+  .mobile-empty-text {
+    max-width: 320px;
+    margin: 7px auto 0;
+    color: #7f8993;
+    font-size: 12px;
+    line-height: 1.5;
   }
 
   .info-row {
@@ -848,5 +932,23 @@ button {
 
   .info-row strong {
     font-size: 12px;
+  }
+
+  .mobile-lap-card {
+    padding: 14px;
+  }
+
+  .mobile-lap-main {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .mobile-main-time {
+    font-size: 24px;
+  }
+
+  .mobile-lap-grid {
+    gap: 10px;
   }
 }
