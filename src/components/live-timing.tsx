@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Rt004Lap, Rt004Session } from "@/types/timing";
 
@@ -19,6 +19,8 @@ function formatSpeed(lapTimeMs: number | null | undefined, trackLengthM: number 
   const speedKmh = (trackLengthM / (lapTimeMs / 1000)) * 3.6;
   return speedKmh.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
+
+type SessionWithEvent = Rt004Session & { event_id?: string | null };
 
 type EventOption = {
   id: string;
@@ -80,16 +82,103 @@ function Icon({
 }
 
 export default function LiveTiming() {
-  const [session, setSession] = useState<Rt004Session | null>(null);
+  const [session, setSession] = useState<SessionWithEvent | null>(null);
   const [laps, setLaps] = useState<Rt004Lap[]>([]);
   const [now, setNow] = useState(Date.now());
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<"CONNECTING" | "ONLINE" | "OFFLINE">("CONNECTING");
   const [events, setEvents] = useState<EventOption[]>([]);
   const [selectedEventId, setSelectedEventId] = useState("");
+  const [sessionAction, setSessionAction] = useState<"starting" | "ending" | null>(null);
+  const [sessionMessage, setSessionMessage] = useState("");
+  const sessionIdRef = useRef<string | null>(null);
 
   const selectedEvent = events.find((event) => event.id === selectedEventId) ?? null;
-  const trackLengthM = selectedEvent?.length_m ?? null;
+  const sessionEvent = session?.event_id
+    ? events.find((event) => event.id === session.event_id) ?? null
+    : null;
+  // Voltas já registradas usam a pista vinculada à sessão; a seleção é usada para o próximo treino.
+  const trackLengthM = sessionEvent?.length_m ?? selectedEvent?.length_m ?? null;
+  const isSessionActive = Boolean(session && !session.finished_at);
+
+  async function callSessionRpc(functionName: string, args: Record<string, string>) {
+    const rpcClient = supabase as unknown as {
+      rpc: (
+        name: string,
+        parameters: Record<string, string>,
+      ) => Promise<{ data: unknown; error: { message: string } | null }>;
+    };
+    return rpcClient.rpc(functionName, args);
+  }
+
+  async function startTraining() {
+    if (isSessionActive) {
+      setSessionMessage("Encerre a sessão atual antes de iniciar outro treino.");
+      return;
+    }
+    if (!selectedEvent) {
+      setSessionMessage("Cadastre ou selecione um evento antes de iniciar o treino.");
+      return;
+    }
+    if (!selectedEvent.track_id || !selectedEvent.length_m || selectedEvent.length_m <= 0) {
+      setSessionMessage("O evento precisa ter uma pista associada com metragem válida.");
+      return;
+    }
+
+    setSessionAction("starting");
+    setSessionMessage("");
+    const { data, error } = await callSessionRpc("start_rt004_session", {
+      p_event_id: selectedEvent.id,
+      p_device_name: session?.device_name || "LapWiz-7DBE",
+      p_device_address: session?.device_address || "A4:C1:38:3C:BE:7D",
+    });
+
+    if (error) {
+      setSessionMessage(`Não foi possível iniciar o treino: ${error.message}`);
+      setSessionAction(null);
+      return;
+    }
+
+    const row = (Array.isArray(data) ? data[0] : data) as SessionWithEvent | undefined;
+    if (!row?.id) {
+      setSessionMessage("O banco não retornou a sessão criada. Confira as funções SQL.");
+      setSessionAction(null);
+      return;
+    }
+
+    sessionIdRef.current = row.id;
+    setSession(row);
+    setSelectedEventId(selectedEvent.id);
+    setLaps([]);
+    const startNow = Date.now();
+    setNow(startNow);
+    setLastUpdate(new Date(startNow));
+    setSessionMessage(`Treino iniciado: ${selectedEvent.name}. Aguardando passagens do RT004.`);
+    setSessionAction(null);
+  }
+
+  async function finishTraining() {
+    if (!session || session.finished_at) return;
+    if (!window.confirm("Encerrar este treino? As voltas registradas serão mantidas.")) return;
+
+    setSessionAction("ending");
+    setSessionMessage("");
+    const { data, error } = await callSessionRpc("finish_rt004_session", {
+      p_session_id: session.id,
+    });
+
+    if (error) {
+      setSessionMessage(`Não foi possível encerrar o treino: ${error.message}`);
+      setSessionAction(null);
+      return;
+    }
+
+    const row = (Array.isArray(data) ? data[0] : data) as SessionWithEvent | undefined;
+    if (row?.id) setSession(row);
+    setLastUpdate(new Date());
+    setSessionMessage("Treino encerrado. As voltas estão salvas; você já pode selecionar outro evento e iniciar novamente.");
+    setSessionAction(null);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -102,7 +191,8 @@ export default function LiveTiming() {
 
       if (cancelled || eventError || trackError) return;
 
-      const trackById = new Map((trackRows ?? []).map((track) => [track.id, track]));
+      const tracks = (trackRows ?? []) as Array<{ id: string; name: string; length_m: number | string | null }>;
+      const trackById = new Map<string, (typeof tracks)[number]>(tracks.map((track) => [track.id, track]));
       const options: EventOption[] = (eventRows ?? []).map((event) => {
         const track = event.track_id ? trackById.get(event.track_id) : undefined;
         return {
@@ -138,12 +228,18 @@ export default function LiveTiming() {
     }
 
     if (!sessionData) {
+      sessionIdRef.current = null;
       setSession(null);
       setLaps([]);
       return;
     }
 
-    setSession(sessionData as Rt004Session);
+    const nextSession = sessionData as SessionWithEvent;
+    if (sessionIdRef.current !== nextSession.id) {
+      sessionIdRef.current = nextSession.id;
+      if (nextSession.event_id) setSelectedEventId(nextSession.event_id);
+    }
+    setSession(nextSession);
 
     const { data: lapData, error: lapError } = await supabase
       .from("rt004_laps")
@@ -247,12 +343,16 @@ export default function LiveTiming() {
 
   const currentLapNumber = lastLap ? lastLap.lap_number + 1 : 1;
 
-  const currentLapMs = lastLap
-    ? Math.max(0, now - new Date(lastLap.end_at).getTime())
+  const currentLapBase = lastLap?.end_at ?? session?.started_at;
+  const currentLapMs = session && !session.finished_at && currentLapBase
+    ? Math.max(0, now - new Date(currentLapBase).getTime())
     : 0;
 
+  const sessionEndTime = session?.finished_at
+    ? new Date(session.finished_at).getTime()
+    : now;
   const sessionDuration = session
-    ? now - new Date(session.started_at).getTime()
+    ? Math.max(0, sessionEndTime - new Date(session.started_at).getTime())
     : 0;
 
   const previousLap = (lapNumber: number) =>
@@ -389,7 +489,7 @@ export default function LiveTiming() {
 
             <InfoRow
               label="Passagens"
-              value={String(laps.length + 1)}
+              value={String(laps.length + (isSessionActive ? 1 : 0))}
             />
 
             <InfoRow
@@ -400,9 +500,12 @@ export default function LiveTiming() {
             <button
               className="stop-button"
               type="button"
+              onClick={finishTraining}
+              disabled={!isSessionActive || sessionAction !== null}
+              style={{ opacity: !isSessionActive || sessionAction !== null ? 0.55 : 1, cursor: !isSessionActive || sessionAction !== null ? "not-allowed" : "pointer" }}
             >
               <span>■</span>
-              Encerrar Sessão
+              {sessionAction === "ending" ? "Encerrando..." : session?.finished_at ? "Treino encerrado" : "Encerrar treino"}
             </button>
           </section>
         </aside>
@@ -420,7 +523,8 @@ export default function LiveTiming() {
                 id="live-timing-event"
                 value={selectedEventId}
                 onChange={(event) => setSelectedEventId(event.target.value)}
-                style={{ minWidth: 240, maxWidth: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #27313a", background: "#0c1015", color: "#f4f6f8" }}
+                disabled={isSessionActive || sessionAction !== null}
+                style={{ minWidth: 240, maxWidth: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #27313a", background: isSessionActive ? "#171c22" : "#0c1015", color: "#f4f6f8", opacity: isSessionActive ? 0.7 : 1 }}
               >
                 {events.length === 0 ? <option value="">Nenhum evento encontrado</option> : null}
                 {events.map((event) => (
@@ -433,9 +537,22 @@ export default function LiveTiming() {
                 Pista: <strong>{selectedEvent?.track_name ?? "--"}</strong>
               </span>
               <span style={{ color: "#d3d7dc", fontSize: 13 }}>
-                Extensão: <strong>{trackLengthM != null ? `${trackLengthM.toLocaleString("pt-BR")} m` : "metragem não cadastrada"}</strong>
+                Extensão: <strong>{(selectedEvent?.length_m ?? null) != null ? `${selectedEvent!.length_m!.toLocaleString("pt-BR")} m` : "metragem não cadastrada"}</strong>
               </span>
+              <button
+                type="button"
+                onClick={startTraining}
+                disabled={isSessionActive || sessionAction !== null || !selectedEvent || !selectedEvent.length_m}
+                style={{ padding: "10px 15px", borderRadius: 8, border: "1px solid #16a765", background: isSessionActive || sessionAction !== null || !selectedEvent || !selectedEvent.length_m ? "#27313a" : "#13a765", color: "#fff", fontWeight: 800, cursor: isSessionActive || sessionAction !== null || !selectedEvent || !selectedEvent.length_m ? "not-allowed" : "pointer", opacity: isSessionActive ? 0.65 : 1 }}
+              >
+                {sessionAction === "starting" ? "Iniciando..." : isSessionActive ? "Treino em andamento" : "Iniciar novo treino"}
+              </button>
             </div>
+            {sessionMessage ? (
+              <div role="status" style={{ marginTop: 12, color: sessionMessage.startsWith("Não foi possível") || sessionMessage.startsWith("O evento") || sessionMessage.startsWith("Encerre") ? "#ff7373" : "#40df93", fontSize: 13 }}>
+                {sessionMessage}
+              </div>
+            ) : null}
           </section>
 
           <div className="stats-grid">
