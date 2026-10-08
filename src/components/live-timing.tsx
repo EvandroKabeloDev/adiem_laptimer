@@ -14,11 +14,25 @@ function formatLapTime(ms: number | null | undefined) {
   return `${minutes}:${seconds.toFixed(3).padStart(6, "0")}`;
 }
 
+function formatSpeed(lapTimeMs: number | null | undefined, trackLengthM: number | null) {
+  if (lapTimeMs == null || lapTimeMs <= 0 || trackLengthM == null || trackLengthM <= 0) return "--";
+  const speedKmh = (trackLengthM / (lapTimeMs / 1000)) * 3.6;
+  return speedKmh.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+type EventOption = {
+  id: string;
+  name: string;
+  event_date: string;
+  track_id: string | null;
+  track_name: string;
+  length_m: number | null;
+};
+
 function formatClock(date: string | null | undefined) {
   if (!date) return "--:--:--";
 
   return new Date(date).toLocaleTimeString("pt-BR", {
-    timeZone: "America/Sao_Paulo",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -29,7 +43,6 @@ function formatDateTime(date: string | null | undefined) {
   if (!date) return "--/--/---- --:--:--";
 
   return new Date(date).toLocaleString("pt-BR", {
-    timeZone: "America/Sao_Paulo",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -71,33 +84,80 @@ export default function LiveTiming() {
   const [laps, setLaps] = useState<Rt004Lap[]>([]);
   const [now, setNow] = useState(Date.now());
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [online, setOnline] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] = useState<"CONNECTING" | "ONLINE" | "OFFLINE">("CONNECTING");
+  const [events, setEvents] = useState<EventOption[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState("");
+
+  const selectedEvent = events.find((event) => event.id === selectedEventId) ?? null;
+  const trackLengthM = selectedEvent?.length_m ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadEvents() {
+      const [{ data: eventRows, error: eventError }, { data: trackRows, error: trackError }] = await Promise.all([
+        supabase.from("events").select("id,name,event_date,track_id,status").order("event_date", { ascending: false }),
+        supabase.from("tracks").select("id,name,length_m"),
+      ]);
+
+      if (cancelled || eventError || trackError) return;
+
+      const trackById = new Map((trackRows ?? []).map((track) => [track.id, track]));
+      const options: EventOption[] = (eventRows ?? []).map((event) => {
+        const track = event.track_id ? trackById.get(event.track_id) : undefined;
+        return {
+          id: event.id,
+          name: event.name,
+          event_date: event.event_date,
+          track_id: event.track_id,
+          track_name: track?.name ?? "Pista não informada",
+          length_m: track?.length_m == null ? null : Number(track.length_m),
+        };
+      });
+
+      setEvents(options);
+      setSelectedEventId((current) => current || options[0]?.id || "");
+    }
+
+    loadEvents();
+    return () => { cancelled = true; };
+  }, []);
 
   async function loadData() {
-    const { data: sessionData } = await supabase
+    const { data: sessionData, error: sessionError } = await supabase
       .from("rt004_sessions")
       .select("*")
       .order("started_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
+    if (sessionError) {
+      setRealtimeStatus("OFFLINE");
+      
+      return;
+    }
+
     if (!sessionData) {
       setSession(null);
       setLaps([]);
-      setOnline(false);
       return;
     }
 
     setSession(sessionData as Rt004Session);
 
-    const { data: lapData } = await supabase
+    const { data: lapData, error: lapError } = await supabase
       .from("rt004_laps")
       .select("*")
       .eq("session_id", sessionData.id)
       .order("lap_number", { ascending: true });
 
+    if (lapError) {
+      setRealtimeStatus("OFFLINE");
+      
+      return;
+    }
+
     setLaps((lapData ?? []) as Rt004Lap[]);
-    setOnline(true);
     setLastUpdate(new Date());
   }
 
@@ -130,14 +190,27 @@ export default function LiveTiming() {
             );
           });
 
-          setOnline(true);
           setLastUpdate(new Date());
         },
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
-          setOnline(true);
+          setRealtimeStatus("ONLINE");
+          
+          return;
         }
+
+        if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          setRealtimeStatus("OFFLINE");
+          
+          return;
+        }
+
+        setRealtimeStatus("CONNECTING");
       });
 
     return () => {
@@ -213,12 +286,12 @@ export default function LiveTiming() {
         <div className="realtime-badge">
           <span
             className={
-              online ? "status-dot online" : "status-dot"
+              realtimeStatus === "ONLINE" ? "status-dot online" : "status-dot"
             }
           />
 
           <span>
-            {online ? "Tempo Real" : "Offline"}
+            {realtimeStatus === "ONLINE" ? "Tempo Real" : realtimeStatus === "CONNECTING" ? "Conectando" : "Offline"}
           </span>
         </div>
       </header>
@@ -229,17 +302,19 @@ export default function LiveTiming() {
             <div className="panel-title-row">
               <div className="panel-title">
                 <Icon>⌁</Icon>
-                Conexão RT004
+                Conexão do Sistema
               </div>
 
               <span
                 className={
-                  online
+                  realtimeStatus === "ONLINE"
                     ? "connected-pill"
-                    : "offline-pill"
+                    : realtimeStatus === "CONNECTING"
+                      ? "connected-pill"
+                      : "offline-pill"
                 }
               >
-                {online ? "Conectado" : "Offline"}
+                {realtimeStatus === "ONLINE" ? "Conectado" : realtimeStatus === "CONNECTING" ? "Conectando" : "Offline"}
               </span>
             </div>
 
@@ -262,9 +337,11 @@ export default function LiveTiming() {
             <InfoRow
               label="Status"
               value={
-                online
-                  ? "Recebendo dados"
-                  : "Aguardando dados"
+                realtimeStatus === "ONLINE"
+                  ? "Realtime conectado"
+                  : realtimeStatus === "CONNECTING"
+                    ? "Conectando ao Realtime"
+                    : "Sem comunicação com o Realtime"
               }
             />
 
@@ -331,6 +408,36 @@ export default function LiveTiming() {
         </aside>
 
         <section className="main-area">
+          <section className="panel" style={{ marginBottom: 16, padding: 16 }}>
+            <div className="panel-title" style={{ marginBottom: 12 }}>
+              Evento e pista
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 14 }}>
+              <label htmlFor="live-timing-event" style={{ color: "#8e9aa7", fontSize: 13 }}>
+                Evento selecionado
+              </label>
+              <select
+                id="live-timing-event"
+                value={selectedEventId}
+                onChange={(event) => setSelectedEventId(event.target.value)}
+                style={{ minWidth: 240, maxWidth: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #27313a", background: "#0c1015", color: "#f4f6f8" }}
+              >
+                {events.length === 0 ? <option value="">Nenhum evento encontrado</option> : null}
+                {events.map((event) => (
+                  <option key={event.id} value={event.id}>
+                    {event.name} — {new Date(`${event.event_date}T12:00:00`).toLocaleDateString("pt-BR")}
+                  </option>
+                ))}
+              </select>
+              <span style={{ color: "#d3d7dc", fontSize: 13 }}>
+                Pista: <strong>{selectedEvent?.track_name ?? "--"}</strong>
+              </span>
+              <span style={{ color: "#d3d7dc", fontSize: 13 }}>
+                Extensão: <strong>{trackLengthM != null ? `${trackLengthM.toLocaleString("pt-BR")} m` : "metragem não cadastrada"}</strong>
+              </span>
+            </div>
+          </section>
+
           <div className="stats-grid">
             <StatCard
               icon="◷"
@@ -404,7 +511,7 @@ export default function LiveTiming() {
                     <th>Tempo da Volta</th>
                     <th>Dif. Melhor</th>
                     <th>Dif. Anterior</th>
-                    <th>Contador</th>
+                    <th>Velocidade Média</th>
                     <th>Hora da Passagem</th>
                   </tr>
                 </thead>
@@ -455,9 +562,7 @@ export default function LiveTiming() {
                               className="lap-number"
                               data-label="Volta"
                             >
-                              <span className="mobile-cell-value">
-                                {lap.lap_number}
-                              </span>
+                              {lap.lap_number}
                             </td>
 
                             <td
@@ -468,11 +573,9 @@ export default function LiveTiming() {
                                   : "lap-time"
                               }
                             >
-                              <span className="mobile-cell-value">
-                                {formatLapTime(
-                                  lap.lap_time_ms,
-                                )}
-                              </span>
+                              {formatLapTime(
+                                lap.lap_time_ms,
+                              )}
                             </td>
 
                             <td
@@ -483,14 +586,12 @@ export default function LiveTiming() {
                                   : "delta neutral"
                               }
                             >
-                              <span className="mobile-cell-value">
-                                {diffBest === 0
-                                  ? "-"
-                                  : `+${(
-                                      diffBest /
-                                      1000
-                                    ).toFixed(3)}`}
-                              </span>
+                              {diffBest === 0
+                                ? "-"
+                                : `+${(
+                                    diffBest /
+                                    1000
+                                  ).toFixed(3)}`}
                             </td>
 
                             <td
@@ -503,42 +604,29 @@ export default function LiveTiming() {
                                     : "delta positive"
                               }
                             >
-                              <span className="mobile-cell-value">
-                                {diffPrevious == null
-                                  ? "-"
-                                  : diffPrevious === 0
-                                    ? "0.000"
-                                    : `${
-                                        diffPrevious >
-                                        0
-                                          ? "+"
-                                          : ""
-                                      }${(
-                                        diffPrevious /
-                                        1000
-                                      ).toFixed(3)}`}
-                              </span>
+                              {diffPrevious == null
+                                ? "-"
+                                : diffPrevious === 0
+                                  ? "0.000"
+                                  : `${
+                                      diffPrevious >
+                                      0
+                                        ? "+"
+                                        : ""
+                                    }${(
+                                      diffPrevious /
+                                      1000
+                                    ).toFixed(3)}`}
                             </td>
 
-                            <td
-                              data-label="Contador"
-                              className="counter-cell"
-                            >
-                              <span className="mobile-cell-value">
-                                {lap.counter_delta
-                                  ? lap.counter_delta.toLocaleString(
-                                      "pt-BR",
-                                    )
-                                  : "--"}
-                              </span>
+                            <td data-label="Velocidade média" className="delta neutral">
+                              {formatSpeed(lap.lap_time_ms, trackLengthM)}{trackLengthM != null ? " km/h" : ""}
                             </td>
 
                             <td data-label="Hora da passagem">
-                              <span className="mobile-cell-value">
-                                {formatClock(
-                                  lap.end_at,
-                                )}
-                              </span>
+                              {formatClock(
+                                lap.end_at,
+                              )}
                             </td>
                           </tr>
                         );
@@ -547,6 +635,7 @@ export default function LiveTiming() {
                 </tbody>
               </table>
             </div>
+
 
           </section>
         </section>
