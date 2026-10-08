@@ -18,6 +18,7 @@ function formatClock(date: string | null | undefined) {
   if (!date) return "--:--:--";
 
   return new Date(date).toLocaleTimeString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -28,6 +29,7 @@ function formatDateTime(date: string | null | undefined) {
   if (!date) return "--/--/---- --:--:--";
 
   return new Date(date).toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -69,43 +71,33 @@ export default function LiveTiming() {
   const [laps, setLaps] = useState<Rt004Lap[]>([]);
   const [now, setNow] = useState(Date.now());
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [realtimeStatus, setRealtimeStatus] = useState<"CONNECTING" | "ONLINE" | "OFFLINE">("CONNECTING");
+  const [online, setOnline] = useState(false);
 
   async function loadData() {
-    const { data: sessionData, error: sessionError } = await supabase
+    const { data: sessionData } = await supabase
       .from("rt004_sessions")
       .select("*")
       .order("started_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (sessionError) {
-      setRealtimeStatus("OFFLINE");
-      
-      return;
-    }
-
     if (!sessionData) {
       setSession(null);
       setLaps([]);
+      setOnline(false);
       return;
     }
 
     setSession(sessionData as Rt004Session);
 
-    const { data: lapData, error: lapError } = await supabase
+    const { data: lapData } = await supabase
       .from("rt004_laps")
       .select("*")
       .eq("session_id", sessionData.id)
       .order("lap_number", { ascending: true });
 
-    if (lapError) {
-      setRealtimeStatus("OFFLINE");
-      
-      return;
-    }
-
     setLaps((lapData ?? []) as Rt004Lap[]);
+    setOnline(true);
     setLastUpdate(new Date());
   }
 
@@ -138,27 +130,14 @@ export default function LiveTiming() {
             );
           });
 
+          setOnline(true);
           setLastUpdate(new Date());
         },
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
-          setRealtimeStatus("ONLINE");
-          
-          return;
+          setOnline(true);
         }
-
-        if (
-          status === "CHANNEL_ERROR" ||
-          status === "TIMED_OUT" ||
-          status === "CLOSED"
-        ) {
-          setRealtimeStatus("OFFLINE");
-          
-          return;
-        }
-
-        setRealtimeStatus("CONNECTING");
       });
 
     return () => {
@@ -234,12 +213,12 @@ export default function LiveTiming() {
         <div className="realtime-badge">
           <span
             className={
-              realtimeStatus === "ONLINE" ? "status-dot online" : "status-dot"
+              online ? "status-dot online" : "status-dot"
             }
           />
 
           <span>
-            {realtimeStatus === "ONLINE" ? "Tempo Real" : realtimeStatus === "CONNECTING" ? "Conectando" : "Offline"}
+            {online ? "Tempo Real" : "Offline"}
           </span>
         </div>
       </header>
@@ -250,19 +229,17 @@ export default function LiveTiming() {
             <div className="panel-title-row">
               <div className="panel-title">
                 <Icon>⌁</Icon>
-                Conexão do Sistema
+                Conexão RT004
               </div>
 
               <span
                 className={
-                  realtimeStatus === "ONLINE"
+                  online
                     ? "connected-pill"
-                    : realtimeStatus === "CONNECTING"
-                      ? "connected-pill"
-                      : "offline-pill"
+                    : "offline-pill"
                 }
               >
-                {realtimeStatus === "ONLINE" ? "Conectado" : realtimeStatus === "CONNECTING" ? "Conectando" : "Offline"}
+                {online ? "Conectado" : "Offline"}
               </span>
             </div>
 
@@ -285,11 +262,9 @@ export default function LiveTiming() {
             <InfoRow
               label="Status"
               value={
-                realtimeStatus === "ONLINE"
-                  ? "Realtime conectado"
-                  : realtimeStatus === "CONNECTING"
-                    ? "Conectando ao Realtime"
-                    : "Sem comunicação com o Realtime"
+                online
+                  ? "Recebendo dados"
+                  : "Aguardando dados"
               }
             />
 
@@ -480,7 +455,9 @@ export default function LiveTiming() {
                               className="lap-number"
                               data-label="Volta"
                             >
-                              {lap.lap_number}
+                              <span className="mobile-cell-value">
+                                {lap.lap_number}
+                              </span>
                             </td>
 
                             <td
@@ -491,9 +468,11 @@ export default function LiveTiming() {
                                   : "lap-time"
                               }
                             >
-                              {formatLapTime(
-                                lap.lap_time_ms,
-                              )}
+                              <span className="mobile-cell-value">
+                                {formatLapTime(
+                                  lap.lap_time_ms,
+                                )}
+                              </span>
                             </td>
 
                             <td
@@ -504,12 +483,14 @@ export default function LiveTiming() {
                                   : "delta neutral"
                               }
                             >
-                              {diffBest === 0
-                                ? "-"
-                                : `+${(
-                                    diffBest /
-                                    1000
-                                  ).toFixed(3)}`}
+                              <span className="mobile-cell-value">
+                                {diffBest === 0
+                                  ? "-"
+                                  : `+${(
+                                      diffBest /
+                                      1000
+                                    ).toFixed(3)}`}
+                              </span>
                             </td>
 
                             <td
@@ -522,36 +503,42 @@ export default function LiveTiming() {
                                     : "delta positive"
                               }
                             >
-                              {diffPrevious == null
-                                ? "-"
-                                : diffPrevious === 0
-                                  ? "0.000"
-                                  : `${
-                                      diffPrevious >
-                                      0
-                                        ? "+"
-                                        : ""
-                                    }${(
-                                      diffPrevious /
-                                      1000
-                                    ).toFixed(3)}`}
+                              <span className="mobile-cell-value">
+                                {diffPrevious == null
+                                  ? "-"
+                                  : diffPrevious === 0
+                                    ? "0.000"
+                                    : `${
+                                        diffPrevious >
+                                        0
+                                          ? "+"
+                                          : ""
+                                      }${(
+                                        diffPrevious /
+                                        1000
+                                      ).toFixed(3)}`}
+                              </span>
                             </td>
 
                             <td
                               data-label="Contador"
                               className="counter-cell"
                             >
-                              {lap.counter_delta
-                                ? lap.counter_delta.toLocaleString(
-                                    "pt-BR",
-                                  )
-                                : "--"}
+                              <span className="mobile-cell-value">
+                                {lap.counter_delta
+                                  ? lap.counter_delta.toLocaleString(
+                                      "pt-BR",
+                                    )
+                                  : "--"}
+                              </span>
                             </td>
 
                             <td data-label="Hora da passagem">
-                              {formatClock(
-                                lap.end_at,
-                              )}
+                              <span className="mobile-cell-value">
+                                {formatClock(
+                                  lap.end_at,
+                                )}
+                              </span>
                             </td>
                           </tr>
                         );
@@ -560,7 +547,6 @@ export default function LiveTiming() {
                 </tbody>
               </table>
             </div>
-
 
           </section>
         </section>
