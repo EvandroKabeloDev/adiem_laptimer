@@ -1,5 +1,5 @@
-import LiveTiming from "@/components/live-timing";
+import Tracks from "@/components/tracks";
 
-export default function Home() {
-  return <LiveTiming />;
+export default function TracksPage() {
+  return <Tracks />;
 }
