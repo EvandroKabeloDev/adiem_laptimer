@@ -1032,6 +1032,8 @@ button {
 }
 
 .platform-nav {
+  position: relative;
+  z-index: 110;
   width: min(1700px, 92%);
   margin: 18px auto 0;
   display: flex;

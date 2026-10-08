@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRight, Flag, Gauge, Plus, RefreshCw, Settings, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -294,15 +295,15 @@ export default function Karts() {
           </div>
         </div>
         <div className="platform-product"><span>Racing</span> Platform</div>
-        <a href="/" className="timing-link">Live Timing <ChevronRight size={16} /></a>
+        <Link href="/" className="timing-link" onClick={closeModals}>Live Timing <ChevronRight size={16} /></Link>
       </header>
 
       <nav className="platform-nav" aria-label="Navegação principal">
-        <a className="nav-item" href="/events"><Flag size={17} />Eventos / Treinos</a>
-        <a className="nav-item" href="/pilots">Pilotos</a>
-        <a className="nav-item active" href="/karts"><Gauge size={17} />Karts</a>
-        <a className="nav-item" href="/tracks">Pistas</a>
-        <a className="nav-item" href="/events">Coletores</a>
+        <Link className="nav-item" href="/events" onClick={closeModals}><Flag size={17} />Eventos / Treinos</Link>
+        <Link className="nav-item" href="/pilots" onClick={closeModals}>Pilotos</Link>
+        <Link className="nav-item active" href="/karts" onClick={closeModals}><Gauge size={17} />Karts</Link>
+        <Link className="nav-item" href="/tracks" onClick={closeModals}>Pistas</Link>
+        <Link className="nav-item" href="/events" onClick={closeModals}>Coletores</Link>
       </nav>
 
       <section className="platform-content">
