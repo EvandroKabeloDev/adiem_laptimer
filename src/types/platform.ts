@@ -62,3 +62,36 @@ export type RacingEvent = {
   updated_at: string;
   track?: Track | null;
 };
+
+export type Kart = {
+  id: string;
+  number: string;
+  name: string | null;
+  category_id: string | null;
+  chassis: string | null;
+  chassis_year: number | null;
+  engine: string | null;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type KartSetup = {
+  id: string;
+  kart_id: string;
+  name: string;
+  setup_date: string | null;
+  tire_brand: string | null;
+  tire_model: string | null;
+  tire_pressure_psi: number | string | null;
+  front_sprocket: number | string | null;
+  rear_sprocket: number | string | null;
+  caster: number | string | null;
+  camber: number | string | null;
+  geometry: string | null;
+  brake_pad_status: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
