@@ -259,6 +259,10 @@ export default function EventsTraining() {
           <Gauge size={17} />
           Karts
         </a>
+        <a className="nav-item" href="/tracks">
+          <MapPin size={17} />
+          Pistas
+        </a>
         <a className="nav-item" href="/events">
           <RefreshCw size={17} />
           Coletores
