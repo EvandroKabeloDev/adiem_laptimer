@@ -134,7 +134,22 @@ export default function EventsTraining() {
           "Não foi possível carregar os dados.",
       );
     } else {
-      setEvents((eventsResult.data ?? []) as RacingEvent[]);
+      const eventRows = eventsResult.data ?? [];
+
+      setEvents(
+        eventRows.map((event) => {
+          const trackData = event.track;
+          const track = Array.isArray(trackData)
+            ? trackData[0] ?? null
+            : trackData ?? null;
+
+          return {
+            ...event,
+            track,
+          } as RacingEvent;
+        }),
+      );
+
       setTracks((tracksResult.data ?? []) as Track[]);
     }
 
