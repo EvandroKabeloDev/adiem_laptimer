@@ -251,7 +251,7 @@ export default function EventsTraining() {
           <Flag size={17} />
           Eventos / Treinos
         </a>
-        <a className="nav-item" href="/events">
+        <a className="nav-item" href="/pilots">
           <Trophy size={17} />
           Pilotos
         </a>

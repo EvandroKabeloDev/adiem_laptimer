@@ -23,6 +23,22 @@ export type Track = {
   status: string;
 };
 
+export type PilotCategory = {
+  id: string;
+  name: string;
+  status: string;
+};
+
+export type Pilot = {
+  id: string;
+  name: string;
+  birth_date: string | null;
+  category_id: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type RacingEvent = {
   id: string;
   name: string;

@@ -147,7 +147,7 @@ export default function Tracks() {
           <Flag size={17} />
           Eventos / Treinos
         </a>
-        <a className="nav-item" href="/events">
+        <a className="nav-item" href="/pilots">
           Pilotos
         </a>
         <a className="nav-item" href="/events">
