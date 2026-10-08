@@ -31,10 +31,18 @@ export type PilotCategory = {
 
 export type Pilot = {
   id: string;
-  name: string;
+  first_name: string;
+  last_name: string;
+  photo_url: string | null;
   birth_date: string | null;
+  weight_kg: number | null;
+  height_m: number | null;
   category_id: string | null;
+  responsible_name: string | null;
+  responsible_phone: string | null;
+  google_id: string | null;
   status: string;
+  notes: string | null;
   created_at: string;
   updated_at: string;
 };

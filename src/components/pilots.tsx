@@ -6,14 +6,16 @@ import { supabase } from "@/lib/supabase";
 import type { Pilot, PilotCategory } from "@/types/platform";
 
 type PilotForm = {
-  name: string;
+  first_name: string;
+  last_name: string;
   birth_date: string;
   category_id: string;
   status: "active" | "inactive";
 };
 
 const EMPTY_FORM: PilotForm = {
-  name: "",
+  first_name: "",
+  last_name: "",
   birth_date: "",
   category_id: "",
   status: "active",
@@ -45,8 +47,8 @@ export default function Pilots() {
     const [pilotsResult, categoriesResult] = await Promise.all([
       supabase
         .from("pilots")
-        .select("id,name,birth_date,category_id,status,created_at,updated_at")
-        .order("name", { ascending: true }),
+        .select("id,first_name,last_name,birth_date,category_id,status,created_at,updated_at")
+        .order("first_name", { ascending: true }),
       supabase
         .from("pilot_categories")
         .select("id,name,status")
@@ -105,10 +107,11 @@ export default function Pilots() {
   async function createPilot(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const name = form.name.trim();
+    const firstName = form.first_name.trim();
+    const lastName = form.last_name.trim();
 
-    if (!name) {
-      setError("Informe o nome do piloto.");
+    if (!firstName || !lastName) {
+      setError("Informe nome e sobrenome do piloto.");
       return;
     }
 
@@ -116,7 +119,8 @@ export default function Pilots() {
     setError(null);
 
     const { error: insertError } = await supabase.from("pilots").insert({
-      name,
+      first_name: firstName,
+      last_name: lastName,
       birth_date: form.birth_date || null,
       category_id: form.category_id || null,
       status: form.status,
@@ -239,7 +243,7 @@ export default function Pilots() {
 
                   <div className="event-main">
                     <div className="event-title-line">
-                      <h3>{pilot.name}</h3>
+                      <h3>{pilot.first_name} {pilot.last_name}</h3>
                       <span className="event-type">PILOTO</span>
                     </div>
                     <div className="event-meta">
@@ -284,9 +288,14 @@ export default function Pilots() {
               ) : null}
 
               <div className="form-grid">
-                <label className="field field-full">
-                  <span>Nome completo</span>
-                  <input value={form.name} onChange={(event) => updateForm("name", event.target.value)} placeholder="Ex.: João da Silva" autoFocus />
+                <label className="field">
+                  <span>Nome</span>
+                  <input value={form.first_name} onChange={(event) => updateForm("first_name", event.target.value)} placeholder="Ex.: João" autoFocus />
+                </label>
+
+                <label className="field">
+                  <span>Sobrenome</span>
+                  <input value={form.last_name} onChange={(event) => updateForm("last_name", event.target.value)} placeholder="Ex.: da Silva" />
                 </label>
 
                 <label className="field">
