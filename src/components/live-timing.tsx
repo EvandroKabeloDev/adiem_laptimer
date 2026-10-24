@@ -84,6 +84,7 @@ function Icon({
 export default function LiveTiming() {
   const [session, setSession] = useState<SessionWithEvent | null>(null);
   const [laps, setLaps] = useState<Rt004Lap[]>([]);
+  const [kartLabels, setKartLabels] = useState<Record<string, string>>({});
   const [now, setNow] = useState(Date.now());
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<"CONNECTING" | "ONLINE" | "OFFLINE">("CONNECTING");
@@ -214,6 +215,21 @@ export default function LiveTiming() {
   }, []);
 
   async function loadData() {
+    // Resolve os nomes a partir do cadastro de transponders/karts do Supabase.
+    const [{ data: transponderRows }, { data: kartRows }] = await Promise.all([
+      supabase.from("rt004_transponders").select("transponder_id,kart_id,active"),
+      supabase.from("rt004_karts").select("id,code,name,active"),
+    ]);
+    if (transponderRows && kartRows) {
+      const kartById = new Map((kartRows as Array<{ id: string; code: string; name: string; active: boolean }>).map((k) => [k.id, k]));
+      const labels: Record<string, string> = {};
+      (transponderRows as Array<{ transponder_id: number | string; kart_id: string; active: boolean }>).forEach((t) => {
+        const kart = kartById.get(t.kart_id);
+        if (kart && t.active && kart.active) labels[String(t.transponder_id)] = kart.name || kart.code;
+      });
+      setKartLabels(labels);
+    }
+
     const { data: sessionData, error: sessionError } = await supabase
       .from("rt004_sessions")
       .select("*")
@@ -555,206 +571,56 @@ export default function LiveTiming() {
             ) : null}
           </section>
 
-          <div className="stats-grid">
-            <StatCard
-              icon="◷"
-              label="Melhor Volta"
-              value={formatLapTime(
-                bestLap?.lap_time_ms,
-              )}
-              detail={
-                bestLap
-                  ? `#${bestLap.lap_number}`
-                  : "--"
-              }
-              highlight
-            />
-
-            <StatCard
-              icon="⚑"
-              label="Última Volta"
-              value={formatLapTime(
-                lastLap?.lap_time_ms,
-              )}
-              detail={
-                lastLap
-                  ? `#${lastLap.lap_number}`
-                  : "--"
-              }
-            />
-
-            <StatCard
-              icon="♧"
-              label="Volta Atual"
-              value={formatLapTime(currentLapMs)}
-              detail={`#${currentLapNumber}`}
-            />
-
-            <StatCard
-              icon="◉"
-              label="Média"
-              value={formatLapTime(averageLap)}
-              detail={`${laps.length} voltas`}
-            />
-          </div>
-
-          <section className="panel laps-panel">
-            <div className="laps-header">
-              <div className="laps-title">
-                <span className="flag-icon">⚑</span>
-
-                <span>
-                  Voltas em Tempo Real
-                </span>
-              </div>
-
-              <div className="live-indicator">
-                <span className="status-dot online" />
-
-                Atualizando automaticamente
-              </div>
+          <section className="panel" style={{ marginBottom: 16, padding: 16 }}>
+            <div className="panel-title" style={{ marginBottom: 6 }}>Comparativo dos karts</div>
+            <p style={{ color: "#8e9aa7", fontSize: 12, margin: "0 0 14px" }}>Voltas agrupadas pelo transponder cadastrado. Os tempos antigos sem transponder associado não são atribuídos automaticamente.</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: 14 }}>
+              {[...new Set([...Object.keys(kartLabels), ...laps.map((lap) => String(lap.transponder_id ?? "sem-id"))])]
+                .sort((a, b) => Number(a) - Number(b))
+                .map((transponderId) => {
+                  const kartLaps = laps.filter((lap) => String(lap.transponder_id ?? "sem-id") === transponderId)
+                    .sort((a, b) => a.lap_number - b.lap_number);
+                  const best = kartLaps.reduce<Rt004Lap | null>((acc, lap) => !acc || lap.lap_time_ms < acc.lap_time_ms ? lap : acc, null);
+                  const last = kartLaps[kartLaps.length - 1] ?? null;
+                  const average = kartLaps.length ? kartLaps.reduce((sum, lap) => sum + lap.lap_time_ms, 0) / kartLaps.length : null;
+                  const label = transponderId === "sem-id" ? "Sem transponder" : (kartLabels[transponderId] || `Transponder ${transponderId}`);
+                  return (
+                    <article key={transponderId} style={{ border: "1px solid #27313a", borderRadius: 12, padding: 14, background: "#0c1015", minWidth: 0 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 14 }}>
+                        <div>
+                          <div style={{ color: "#f4f6f8", fontSize: 18, fontWeight: 800 }}>{label}</div>
+                          <div style={{ color: "#8e9aa7", fontSize: 12 }}>Transponder: {transponderId === "sem-id" ? "não identificado" : `ID ${transponderId}`}</div>
+                        </div>
+                        <span style={{ background: "#15291f", color: "#40df93", borderRadius: 6, padding: "5px 8px", fontSize: 12, fontWeight: 700 }}>{kartLaps.length} voltas</span>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 14 }}>
+                        <div style={{ background: "#171c22", borderRadius: 8, padding: 10 }}><div style={{ color: "#8e9aa7", fontSize: 11 }}>MELHOR</div><div style={{ color: "#40df93", fontSize: 19, fontWeight: 800 }}>{formatLapTime(best?.lap_time_ms)}</div></div>
+                        <div style={{ background: "#171c22", borderRadius: 8, padding: 10 }}><div style={{ color: "#8e9aa7", fontSize: 11 }}>ÚLTIMA</div><div style={{ color: "#f4f6f8", fontSize: 19, fontWeight: 800 }}>{formatLapTime(last?.lap_time_ms)}</div></div>
+                        <div style={{ background: "#171c22", borderRadius: 8, padding: 10 }}><div style={{ color: "#8e9aa7", fontSize: 11 }}>MÉDIA</div><div style={{ color: "#f4f6f8", fontSize: 19, fontWeight: 800 }}>{formatLapTime(average)}</div></div>
+                      </div>
+                      <div style={{ overflowX: "auto" }}>
+                        <table className="lap-table" style={{ minWidth: 360, width: "100%" }}>
+                          <thead><tr><th>#</th><th>Tempo</th><th>Dif. melhor</th><th>Passagem</th></tr></thead>
+                          <tbody>
+                            {kartLaps.length === 0 ? <tr><td colSpan={4} className="empty-state">Aguardando passagem...</td></tr> : [...kartLaps].reverse().map((lap) => {
+                              const diff = best ? lap.lap_time_ms - best.lap_time_ms : 0;
+                              return <tr key={lap.id} className={lap.id === best?.id ? "best-row" : ""}>
+                                <td className="lap-number">{lap.lap_number}</td>
+                                <td className={lap.id === best?.id ? "lap-time best-time" : "lap-time"}>{formatLapTime(lap.lap_time_ms)}</td>
+                                <td className={diff > 0 ? "delta negative" : "delta neutral"}>{diff === 0 ? "—" : `+${(diff / 1000).toFixed(3)}`}</td>
+                                <td>{formatClock(lap.end_at)}</td>
+                              </tr>;
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </article>
+                  );
+                })}
+              {Object.keys(kartLabels).length === 0 && laps.length === 0 ? <div className="empty-state" style={{ padding: 24 }}>Aguardando voltas dos transponders cadastrados...</div> : null}
             </div>
-
-            {/* =========================================================
-                DESKTOP / TABLET
-                A tabela original permanece preservada.
-               ========================================================= */}
-
-            <div className="table-wrapper desktop-laps-view">
-              <table className="lap-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Tempo da Volta</th>
-                    <th>Dif. Melhor</th>
-                    <th>Dif. Anterior</th>
-                    <th>Velocidade Média</th>
-                    <th>Hora da Passagem</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {laps.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="empty-state"
-                      >
-                        Aguardando primeira passagem...
-                      </td>
-                    </tr>
-                  ) : (
-                    [...laps]
-                      .reverse()
-                      .map((lap) => {
-                        const previous =
-                          previousLap(
-                            lap.lap_number,
-                          );
-
-                        const diffBest = bestLap
-                          ? lap.lap_time_ms -
-                            bestLap.lap_time_ms
-                          : 0;
-
-                        const diffPrevious =
-                          previous
-                            ? lap.lap_time_ms -
-                              previous.lap_time_ms
-                            : null;
-
-                        const isBest =
-                          lap.id === bestLap?.id;
-
-                        return (
-                          <tr
-                            key={lap.id}
-                            className={
-                              isBest
-                                ? "best-row"
-                                : ""
-                            }
-                          >
-                            <td
-                              className="lap-number"
-                              data-label="Volta"
-                            >
-                              {lap.lap_number}
-                            </td>
-
-                            <td
-                              data-label="Tempo da volta"
-                              className={
-                                isBest
-                                  ? "lap-time best-time"
-                                  : "lap-time"
-                              }
-                            >
-                              {formatLapTime(
-                                lap.lap_time_ms,
-                              )}
-                            </td>
-
-                            <td
-                              data-label="Dif. melhor"
-                              className={
-                                diffBest > 0
-                                  ? "delta negative"
-                                  : "delta neutral"
-                              }
-                            >
-                              {diffBest === 0
-                                ? "-"
-                                : `+${(
-                                    diffBest /
-                                    1000
-                                  ).toFixed(3)}`}
-                            </td>
-
-                            <td
-                              data-label="Dif. anterior"
-                              className={
-                                diffPrevious == null
-                                  ? "delta neutral"
-                                  : diffPrevious > 0
-                                    ? "delta negative"
-                                    : "delta positive"
-                              }
-                            >
-                              {diffPrevious == null
-                                ? "-"
-                                : diffPrevious === 0
-                                  ? "0.000"
-                                  : `${
-                                      diffPrevious >
-                                      0
-                                        ? "+"
-                                        : ""
-                                    }${(
-                                      diffPrevious /
-                                      1000
-                                    ).toFixed(3)}`}
-                            </td>
-
-                            <td data-label="Velocidade média" className="delta neutral">
-                              {formatSpeed(lap.lap_time_ms, trackLengthM)}{trackLengthM != null ? " km/h" : ""}
-                            </td>
-
-                            <td data-label="Hora da passagem">
-                              {formatClock(
-                                lap.end_at,
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-
           </section>
+
         </section>
       </section>
     </main>
