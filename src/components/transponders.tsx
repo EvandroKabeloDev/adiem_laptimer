@@ -79,7 +79,7 @@ export default function Transponders() {
 
       if (kr.error) {
         throw new Error(
-          `Não foi possível carregar karts RT004: ${kr.error.message}`
+          `Não foi possível carregar karts do portal: ${kr.error.message}`
         );
       }
 
@@ -130,7 +130,7 @@ export default function Transponders() {
       const { data, error: updateError } = await supabase
         .from("rt004_transponders")
         .update({
-          kart_id: row.kart_id || null,
+          portal_kart_id: row.portal_kart_id || null,
           pilot_id: row.pilot_id || null,
           active: row.active,
         })
@@ -266,7 +266,7 @@ export default function Transponders() {
         >
           <div>
             <h1>Transponders</h1>
-            <p>Associe cada transponder ao kart RT004 e ao piloto.</p>
+            <p>Associe cada transponder ao kart cadastrado no portal e ao piloto.</p>
           </div>
 
           <button
@@ -308,7 +308,7 @@ export default function Transponders() {
 
           <div className="panel">
             <Activity />
-            <div>Karts RT004 ativos</div>
+            <div>Karts cadastrados no portal</div>
             <strong style={{ fontSize: 28 }}>{karts.length}</strong>
           </div>
         </div>
