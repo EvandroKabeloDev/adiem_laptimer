@@ -44,9 +44,13 @@ export default function Transponders() {
   async function saveAssignment(row: Assignment) {
     setSaving(true); setError(""); setNotice("");
     const { error: updateError } = await supabase.from("rt004_transponders").update({ kart_id: row.kart_id || null, pilot_id: row.pilot_id || null, active: row.active }).eq("transponder_id", row.transponder_id);
-    if (updateError) setError(`Falha ao salvar o transponder ${row.transponder_id}: ${updateError.message}`);
-    else setNotice(`Transponder ${row.transponder_id} atualizado.`);
-    setSaving(false); await load();
+    setSaving(false);
+    if (updateError) {
+      setError(`Falha ao salvar o transponder ${row.transponder_id}: ${updateError.message}`);
+      return;
+    }
+    setNotice(`Transponder ${row.transponder_id} atualizado.`);
+    await load();
   }
 
   async function addAssignment(event: React.FormEvent<HTMLFormElement>) {
@@ -56,9 +60,15 @@ export default function Transponders() {
     if (rows.some(r => r.transponder_id === id)) { setError("Esse transponder já está cadastrado."); return; }
     setSaving(true); setError(""); setNotice("");
     const { error: insertError } = await supabase.from("rt004_transponders").insert({ transponder_id: id, kart_id: newKart || null, pilot_id: newPilot || null, active: true });
-    if (insertError) setError(`Não foi possível cadastrar: ${insertError.message}`);
-    else { setNotice(`Transponder ${id} cadastrado.`); setNewId(""); setNewKart(""); setNewPilot(""); }
-    setSaving(false); await load();
+    setSaving(false);
+    if (insertError) {
+      // Preserve the actual Supabase error; load() clears transient errors.
+      setError(`Não foi possível cadastrar: ${insertError.message}`);
+      return;
+    }
+    setNotice(`Transponder ${id} cadastrado.`);
+    setNewId(""); setNewKart(""); setNewPilot("");
+    await load();
   }
 
   function patch(id: number, patchValue: Partial<Assignment>) {
