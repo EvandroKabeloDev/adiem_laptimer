@@ -34,6 +34,8 @@ type Assignment = {
   active: boolean;
 };
 
+const ADMIN_SESSION_KEY = "adiem_admin_password";
+
 export default function Transponders() {
   const [rows, setRows] = useState<Assignment[]>([]);
   const [karts, setKarts] = useState<Kart[]>([]);
@@ -127,28 +129,53 @@ export default function Transponders() {
     setNotice("");
 
     try {
-      const adminPassword = window.prompt(
-        "Digite a senha administrativa para salvar as alterações:"
-      );
+      let adminPassword = sessionStorage.getItem(ADMIN_SESSION_KEY);
 
       if (!adminPassword) {
-        setError("Operação cancelada: senha não informada.");
-        return;
+        adminPassword = window.prompt(
+          "Digite a senha administrativa. Ela será reutilizada nesta sessão do navegador."
+        );
+
+        if (!adminPassword) {
+          setError("Operação cancelada: senha não informada.");
+          return;
+        }
+
+        sessionStorage.setItem(ADMIN_SESSION_KEY, adminPassword);
       }
 
-      const response = await fetch("/api/transponders", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "x-admin-password": adminPassword,
-        },
-        body: JSON.stringify({
-          transponder_id: row.transponder_id,
-          kart_id: row.kart_id || null,
-          pilot_id: row.pilot_id || null,
-          active: row.active,
-        }),
-      });
+      const sendUpdate = (password: string) =>
+        fetch("/api/transponders", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-password": password,
+          },
+          body: JSON.stringify({
+            transponder_id: row.transponder_id,
+            kart_id: row.kart_id || null,
+            pilot_id: row.pilot_id || null,
+            active: row.active,
+          }),
+        });
+
+      let response = await sendUpdate(adminPassword);
+
+      if (response.status === 401) {
+        sessionStorage.removeItem(ADMIN_SESSION_KEY);
+
+        adminPassword = window.prompt(
+          "A senha foi rejeitada. Confira e digite novamente:"
+        );
+
+        if (!adminPassword) {
+          setError("Operação cancelada: senha não informada.");
+          return;
+        }
+
+        sessionStorage.setItem(ADMIN_SESSION_KEY, adminPassword);
+        response = await sendUpdate(adminPassword);
+      }
 
       const result = await response.json();
 
@@ -188,6 +215,14 @@ export default function Transponders() {
 
     if (newKart && !karts.some((kart) => kart.id === newKart)) {
       setError("Selecione um kart RT004 válido.");
+      return;
+    }
+
+    if (
+      newPilot &&
+      !pilots.some((pilot) => pilot.id === newPilot)
+    ) {
+      setError("Selecione um piloto válido.");
       return;
     }
 
@@ -413,7 +448,9 @@ export default function Transponders() {
                 <thead>
                   <tr>
                     <th style={{ textAlign: "left", padding: 12 }}>ID</th>
-                    <th style={{ textAlign: "left", padding: 12 }}>Kart RT004</th>
+                    <th style={{ textAlign: "left", padding: 12 }}>
+                      Kart RT004
+                    </th>
                     <th style={{ textAlign: "left", padding: 12 }}>Piloto</th>
                     <th style={{ textAlign: "left", padding: 12 }}>Status</th>
                     <th style={{ textAlign: "left", padding: 12 }}>Ação</th>
@@ -452,7 +489,8 @@ export default function Transponders() {
 
                           {row.kart_id && !kart && (
                             <small>
-                              Kart vinculado não está ativo ou não foi encontrado.
+                              O kart vinculado não está ativo ou não foi
+                              encontrado na lista.
                             </small>
                           )}
                         </td>
@@ -515,8 +553,8 @@ export default function Transponders() {
           )}
 
           <p style={{ opacity: 0.7, fontSize: 13, marginTop: 16 }}>
-            Dica: cadastre os karts RT004 e os pilotos primeiro. As alterações
-            são gravadas ao clicar em Salvar.
+            As alterações são gravadas ao clicar em Salvar. A senha
+            administrativa é reutilizada durante a sessão do navegador.
           </p>
         </section>
       </section>
