@@ -1693,3 +1693,52 @@ button {
     padding: 17px;
   }
 }
+
+
+/* ADIEM: correção de contraste e interação dos campos de cadastro */
+.page-content select,
+.page-content input:not([type="checkbox"]),
+.page-content textarea,
+form select,
+form input:not([type="checkbox"]) {
+  color: #f4f6f8;
+  background-color: #151b22;
+  border: 1px solid #3a4652;
+  border-radius: 7px;
+  min-height: 42px;
+  padding: 9px 11px;
+  width: 100%;
+  color-scheme: dark;
+}
+
+.page-content select:focus,
+.page-content input:focus,
+form select:focus,
+form input:focus {
+  outline: 2px solid rgba(239, 32, 41, 0.7);
+  outline-offset: 1px;
+  border-color: #ef2029;
+}
+
+.page-content select option,
+form select option {
+  color: #f4f6f8;
+  background-color: #151b22;
+}
+
+.page-content label,
+form label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  color: #e7ebef;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.page-content button:disabled,
+form button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
