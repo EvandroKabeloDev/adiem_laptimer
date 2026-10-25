@@ -215,18 +215,42 @@ export default function LiveTiming() {
   }, []);
 
   async function loadData() {
-    // Resolve os nomes a partir do cadastro de transponders/karts do Supabase.
-    const [{ data: transponderRows }, { data: kartRows }] = await Promise.all([
-      supabase.from("rt004_transponders").select("transponder_id,kart_id,active"),
-      supabase.from("rt004_karts").select("id,code,name,active"),
+    // Usa o vínculo atual do transponder com o kart cadastrado no portal.
+    // Não usa mais rt004_karts (Kart X/Kart Y) como nome de exibição.
+    const [{ data: transponderRows, error: transponderError }, { data: kartRows, error: kartError }] = await Promise.all([
+      supabase
+        .from("rt004_transponders")
+        .select("transponder_id,portal_kart_id,active"),
+      supabase
+        .from("karts")
+        .select("id,number,name"),
     ]);
-    if (transponderRows && kartRows) {
-      const kartById = new Map((kartRows as Array<{ id: string; code: string; name: string; active: boolean }>).map((k) => [k.id, k]));
+
+    if (!transponderError && !kartError && transponderRows && kartRows) {
+      const kartById = new Map(
+        (kartRows as Array<{ id: string; number: string | number | null; name: string | null }>)
+          .map((kart) => [kart.id, kart]),
+      );
       const labels: Record<string, string> = {};
-      (transponderRows as Array<{ transponder_id: number | string; kart_id: string; active: boolean }>).forEach((t) => {
-        const kart = kartById.get(t.kart_id);
-        if (kart && t.active && kart.active) labels[String(t.transponder_id)] = kart.name || kart.code;
+
+      (transponderRows as Array<{
+        transponder_id: number | string;
+        portal_kart_id: string | null;
+        active: boolean;
+      }>).forEach((transponder) => {
+        if (!transponder.active || !transponder.portal_kart_id) return;
+
+        const kart = kartById.get(transponder.portal_kart_id);
+        if (!kart) return;
+
+        const kartNumber = kart.number == null ? "" : String(kart.number).trim();
+        const kartName = (kart.name ?? "").trim();
+        labels[String(transponder.transponder_id)] =
+          kartNumber && kartName
+            ? `${kartNumber} - ${kartName}`
+            : kartName || kartNumber || `Kart ${kart.id.slice(0, 8)}`;
       });
+
       setKartLabels(labels);
     }
 
