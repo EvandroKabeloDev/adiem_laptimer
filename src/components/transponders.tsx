@@ -15,9 +15,9 @@ import { supabase } from "@/lib/supabase";
 
 type Kart = {
   id: string;
-  number: string;
-  name: string | null;
-  status: string;
+  code: string;
+  name: string;
+  active: boolean;
 };
 
 type Pilot = {
@@ -60,9 +60,10 @@ export default function Transponders() {
           .order("transponder_id"),
 
         supabase
-          .from("karts")
-          .select("id,number,name,status")
-          .order("number"),
+          .from("rt004_karts")
+          .select("id,code,name,active")
+          .eq("active", true)
+          .order("code"),
 
         supabase
           .from("pilots")
@@ -78,7 +79,7 @@ export default function Transponders() {
 
       if (kr.error) {
         throw new Error(
-          `Não foi possível carregar karts: ${kr.error.message}`
+          `Não foi possível carregar karts RT004: ${kr.error.message}`
         );
       }
 
@@ -93,7 +94,7 @@ export default function Transponders() {
       setPilots((pr.data ?? []) as Pilot[]);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Erro ao carregar dados."
+        err instanceof Error ? err.message : "Erro ao carregar os dados."
       );
     } finally {
       setLoading(false);
@@ -185,6 +186,11 @@ export default function Transponders() {
       return;
     }
 
+    if (newKart && !karts.some((kart) => kart.id === newKart)) {
+      setError("Selecione um kart RT004 válido.");
+      return;
+    }
+
     setSaving(true);
     setError("");
     setNotice("");
@@ -200,7 +206,9 @@ export default function Transponders() {
         });
 
       if (insertError) {
-        throw new Error(`Não foi possível cadastrar: ${insertError.message}`);
+        throw new Error(
+          `Não foi possível cadastrar: ${insertError.message}`
+        );
       }
 
       setNotice(`Transponder ${id} cadastrado.`);
@@ -260,7 +268,7 @@ export default function Transponders() {
         >
           <div>
             <h1>Transponders</h1>
-            <p>Associe cada transponder ao kart e ao piloto.</p>
+            <p>Associe cada transponder ao kart RT004 e ao piloto.</p>
           </div>
 
           <button
@@ -302,7 +310,7 @@ export default function Transponders() {
 
           <div className="panel">
             <Activity />
-            <div>Karts cadastrados</div>
+            <div>Karts RT004 ativos</div>
             <strong style={{ fontSize: 28 }}>{karts.length}</strong>
           </div>
         </div>
@@ -352,7 +360,7 @@ export default function Transponders() {
             </label>
 
             <label>
-              Kart
+              Kart RT004
               <select
                 value={newKart}
                 onChange={(event) => setNewKart(event.target.value)}
@@ -360,8 +368,7 @@ export default function Transponders() {
                 <option value="">Não associado</option>
                 {karts.map((kart) => (
                   <option key={kart.id} value={kart.id}>
-                    {kart.number}
-                    {kart.name ? ` - ${kart.name}` : ""}
+                    {kart.code} - {kart.name}
                   </option>
                 ))}
               </select>
@@ -406,9 +413,9 @@ export default function Transponders() {
                 <thead>
                   <tr>
                     <th style={{ textAlign: "left", padding: 12 }}>ID</th>
-                    <th style={{ textAlign: "left", padding: 12 }}>Kart</th>
+                    <th style={{ textAlign: "left", padding: 12 }}>Kart RT004</th>
                     <th style={{ textAlign: "left", padding: 12 }}>Piloto</th>
-                    <th style={{ textAlign: "left", padding: 12 }}>Ativo</th>
+                    <th style={{ textAlign: "left", padding: 12 }}>Status</th>
                     <th style={{ textAlign: "left", padding: 12 }}>Ação</th>
                   </tr>
                 </thead>
@@ -438,13 +445,15 @@ export default function Transponders() {
                             <option value="">Não associado</option>
                             {karts.map((item) => (
                               <option key={item.id} value={item.id}>
-                                {item.number}
-                                {item.name ? ` - ${item.name}` : ""}
+                                {item.code} - {item.name}
                               </option>
                             ))}
                           </select>
+
                           {row.kart_id && !kart && (
-                            <small>Kart não encontrado na lista</small>
+                            <small>
+                              Kart vinculado não está ativo ou não foi encontrado.
+                            </small>
                           )}
                         </td>
 
@@ -465,8 +474,9 @@ export default function Transponders() {
                               </option>
                             ))}
                           </select>
+
                           {row.pilot_id && !pilotMap.has(row.pilot_id) && (
-                            <small>Piloto não encontrado na lista</small>
+                            <small>Piloto não encontrado na lista.</small>
                           )}
                         </td>
 
@@ -505,8 +515,8 @@ export default function Transponders() {
           )}
 
           <p style={{ opacity: 0.7, fontSize: 13, marginTop: 16 }}>
-            Dica: cadastre pilotos e karts primeiro e depois faça as
-            associações. As alterações só são gravadas ao clicar em Salvar.
+            Dica: cadastre os karts RT004 e os pilotos primeiro. As alterações
+            são gravadas ao clicar em Salvar.
           </p>
         </section>
       </section>
