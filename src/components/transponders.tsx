@@ -15,9 +15,8 @@ import { supabase } from "@/lib/supabase";
 
 type Kart = {
   id: string;
-  code: string;
+  number: string | number;
   name: string;
-  active: boolean;
 };
 
 type Pilot = {
@@ -30,6 +29,7 @@ type Pilot = {
 type Assignment = {
   transponder_id: number;
   kart_id: string | null;
+  portal_kart_id: string | null;
   pilot_id: string | null;
   active: boolean;
 };
@@ -57,14 +57,13 @@ export default function Transponders() {
       const [tr, kr, pr] = await Promise.all([
         supabase
           .from("rt004_transponders")
-          .select("transponder_id,kart_id,pilot_id,active")
+          .select("transponder_id,kart_id,portal_kart_id,pilot_id,active")
           .order("transponder_id"),
 
         supabase
-          .from("rt004_karts")
-          .select("id,code,name,active")
-          .eq("active", true)
-          .order("code"),
+          .from("karts")
+          .select("id,number,name")
+          .order("number"),
 
         supabase
           .from("pilots")
@@ -178,7 +177,7 @@ export default function Transponders() {
     }
 
     if (newKart && !karts.some((kart) => kart.id === newKart)) {
-      setError("Selecione um kart RT004 válido.");
+      setError("Selecione um kart válido do portal.");
       return;
     }
 
@@ -199,7 +198,7 @@ export default function Transponders() {
         .from("rt004_transponders")
         .insert({
           transponder_id: id,
-          kart_id: newKart || null,
+          portal_kart_id: newKart || null,
           pilot_id: newPilot || null,
           active: true,
         });
@@ -359,7 +358,7 @@ export default function Transponders() {
             </label>
 
             <label>
-              Kart RT004
+              Kart do portal
               <select
                 value={newKart}
                 onChange={(event) => setNewKart(event.target.value)}
@@ -367,7 +366,7 @@ export default function Transponders() {
                 <option value="">Não associado</option>
                 {karts.map((kart) => (
                   <option key={kart.id} value={kart.id}>
-                    {kart.code} - {kart.name}
+                    {kart.number} - {kart.name}
                   </option>
                 ))}
               </select>
@@ -413,7 +412,7 @@ export default function Transponders() {
                   <tr>
                     <th style={{ textAlign: "left", padding: 12 }}>ID</th>
                     <th style={{ textAlign: "left", padding: 12 }}>
-                      Kart RT004
+                      Kart do portal
                     </th>
                     <th style={{ textAlign: "left", padding: 12 }}>Piloto</th>
                     <th style={{ textAlign: "left", padding: 12 }}>Status</th>
@@ -423,8 +422,8 @@ export default function Transponders() {
 
                 <tbody>
                   {rows.map((row) => {
-                    const kart = row.kart_id
-                      ? kartMap.get(row.kart_id)
+                    const kart = row.portal_kart_id
+                      ? kartMap.get(row.portal_kart_id)
                       : undefined;
 
                     return (
@@ -436,25 +435,24 @@ export default function Transponders() {
                         <td style={{ padding: 12, minWidth: 180 }}>
                           <select
                             aria-label={`Kart do transponder ${row.transponder_id}`}
-                            value={row.kart_id ?? ""}
+                            value={row.portal_kart_id ?? ""}
                             onChange={(event) =>
                               patch(row.transponder_id, {
-                                kart_id: event.target.value || null,
+                                portal_kart_id: event.target.value || null,
                               })
                             }
                           >
                             <option value="">Não associado</option>
                             {karts.map((item) => (
                               <option key={item.id} value={item.id}>
-                                {item.code} - {item.name}
+                                {item.number} - {item.name}
                               </option>
                             ))}
                           </select>
 
-                          {row.kart_id && !kart && (
+                          {row.portal_kart_id && !kart && (
                             <small>
-                              O kart vinculado não está ativo ou não foi
-                              encontrado na lista.
+                              O kart vinculado não foi encontrado no cadastro do portal.
                             </small>
                           )}
                         </td>
@@ -517,7 +515,7 @@ export default function Transponders() {
           )}
 
           <p style={{ opacity: 0.7, fontSize: 13, marginTop: 16 }}>
-            As alterações são gravadas ao clicar em Salvar. Esta tela não solicita
+            O vínculo com o kart do portal é salvo ao clicar em Salvar. A tela não solicita
             senha; o acesso de gravação depende das políticas RLS do Supabase.
           </p>
         </section>
