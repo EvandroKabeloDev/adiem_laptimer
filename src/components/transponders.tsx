@@ -34,7 +34,6 @@ type Assignment = {
   active: boolean;
 };
 
-const ADMIN_SESSION_KEY = "adiem_admin_password";
 
 export default function Transponders() {
   const [rows, setRows] = useState<Assignment[]>([]);
@@ -129,59 +128,24 @@ export default function Transponders() {
     setNotice("");
 
     try {
-      let adminPassword = sessionStorage.getItem(ADMIN_SESSION_KEY);
+      const { data, error: updateError } = await supabase
+        .from("rt004_transponders")
+        .update({
+          kart_id: row.kart_id || null,
+          pilot_id: row.pilot_id || null,
+          active: row.active,
+        })
+        .eq("transponder_id", row.transponder_id)
+        .select("transponder_id")
+        .maybeSingle();
 
-      if (!adminPassword) {
-        adminPassword = window.prompt(
-          "Digite a senha administrativa. Ela será reutilizada nesta sessão do navegador."
-        );
-
-        if (!adminPassword) {
-          setError("Operação cancelada: senha não informada.");
-          return;
-        }
-
-        sessionStorage.setItem(ADMIN_SESSION_KEY, adminPassword);
+      if (updateError) {
+        throw new Error(`Não foi possível salvar: ${updateError.message}`);
       }
 
-      const sendUpdate = (password: string) =>
-        fetch("/api/transponders", {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "x-admin-password": password,
-          },
-          body: JSON.stringify({
-            transponder_id: row.transponder_id,
-            kart_id: row.kart_id || null,
-            pilot_id: row.pilot_id || null,
-            active: row.active,
-          }),
-        });
-
-      let response = await sendUpdate(adminPassword);
-
-      if (response.status === 401) {
-        sessionStorage.removeItem(ADMIN_SESSION_KEY);
-
-        adminPassword = window.prompt(
-          "A senha foi rejeitada. Confira e digite novamente:"
-        );
-
-        if (!adminPassword) {
-          setError("Operação cancelada: senha não informada.");
-          return;
-        }
-
-        sessionStorage.setItem(ADMIN_SESSION_KEY, adminPassword);
-        response = await sendUpdate(adminPassword);
-      }
-
-      const result = await response.json();
-
-      if (!response.ok) {
+      if (!data) {
         throw new Error(
-          result.error || `Erro HTTP ${response.status}`
+          "Nenhuma alteração foi gravada. Verifique a política de acesso UPDATE no Supabase."
         );
       }
 
@@ -553,8 +517,8 @@ export default function Transponders() {
           )}
 
           <p style={{ opacity: 0.7, fontSize: 13, marginTop: 16 }}>
-            As alterações são gravadas ao clicar em Salvar. A senha
-            administrativa é reutilizada durante a sessão do navegador.
+            As alterações são gravadas ao clicar em Salvar. Esta tela não solicita
+            senha; o acesso de gravação depende das políticas RLS do Supabase.
           </p>
         </section>
       </section>
