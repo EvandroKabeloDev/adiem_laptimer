@@ -41,14 +41,57 @@ export default function Transponders() {
   const kartMap = useMemo(() => new Map(karts.map(k => [k.id, k])), [karts]);
   const pilotMap = useMemo(() => new Map(pilots.map(p => [p.id, `${p.first_name} ${p.last_name}`.trim()])), [pilots]);
 
-  async function saveAssignment(row: Assignment) {
-    setSaving(true); setError(""); setNotice("");
-    const { error: updateError } = await supabase.from("rt004_transponders").update({ kart_id: row.kart_id || null, pilot_id: row.pilot_id || null, active: row.active }).eq("transponder_id", row.transponder_id);
-    setSaving(false);
-    if (updateError) {
-      setError(`Falha ao salvar o transponder ${row.transponder_id}: ${updateError.message}`);
+  
+async function saveAssignment(row: Assignment) {
+  setSaving(true);
+  setError("");
+  setNotice("");
+
+  try {
+    const adminPassword = window.prompt(
+      "Digite a senha administrativa para salvar as alterações:"
+    );
+
+    if (!adminPassword) {
+      setError("Operação cancelada. A senha administrativa é necessária.");
       return;
     }
+
+    const response = await fetch("/api/transponders", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-password": adminPassword,
+      },
+      body: JSON.stringify({
+        transponder_id: row.transponder_id,
+        kart_id: row.kart_id || null,
+        pilot_id: row.pilot_id || null,
+        active: row.active,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error || `Erro HTTP ${response.status}`
+      );
+    }
+
+    setNotice(`Transponder ${row.transponder_id} atualizado.`);
+    await load();
+  } catch (error) {
+    setError(
+      error instanceof Error
+        ? error.message
+        : "Erro inesperado ao salvar."
+    );
+  } finally {
+    setSaving(false);
+  }
+}
+
     setNotice(`Transponder ${row.transponder_id} atualizado.`);
     await load();
   }
