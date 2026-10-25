@@ -302,6 +302,7 @@ export default function Karts() {
         <Link className="nav-item" href="/events" onClick={closeModals}><Flag size={17} />Eventos / Treinos</Link>
         <Link className="nav-item" href="/pilots" onClick={closeModals}>Pilotos</Link>
         <Link className="nav-item active" href="/karts" onClick={closeModals}><Gauge size={17} />Karts</Link>
+        <Link className="nav-item" href="/transponders">Transponders</Link>
         <Link className="nav-item" href="/tracks" onClick={closeModals}>Pistas</Link>
         <Link className="nav-item" href="/events" onClick={closeModals}>Coletores</Link>
       </nav>

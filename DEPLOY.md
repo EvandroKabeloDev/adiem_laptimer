@@ -22,3 +22,10 @@ RT004 → BLE → Python → Supabase → Next.js.
 
 Future production:
 RT004 → ESP32 → MQTT → VPS/backend → Supabase → Next.js.
+
+
+## Cadastro RT004 — Transponder × Kart × Piloto
+
+Antes do deploy desta versão, execute no Supabase SQL Editor o script `supabase/migrations/20261024_rt004_transponder_pilot.sql`. Ele adiciona `pilot_id` opcional à tabela `rt004_transponders`, sem apagar dados existentes. Depois faça o deploy normalmente. A nova tela ficará disponível em `/transponders`. Cadastre pilotos e karts primeiro; em seguida associe-os aos IDs de transponder recebidos pelo RT004.
+
+A tela utiliza as variáveis públicas já existentes `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Não configure a chave `service_role` no frontend. Antes de disponibilizar publicamente, valide as políticas RLS das tabelas acessadas.

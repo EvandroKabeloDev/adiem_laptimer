@@ -259,6 +259,7 @@ export default function EventsTraining() {
           <Gauge size={17} />
           Karts
         </a>
+        <a className="nav-item" href="/transponders">Transponders</a>
         <a className="nav-item" href="/tracks">
           <MapPin size={17} />
           Pistas

@@ -164,6 +164,7 @@ export default function Pilots() {
         <a className="nav-item" href="/events"><Flag size={17} />Eventos / Treinos</a>
         <a className="nav-item active" href="/pilots"><Trophy size={17} />Pilotos</a>
         <a className="nav-item" href="/karts">Karts</a>
+        <a className="nav-item" href="/transponders">Transponders</a>
         <a className="nav-item" href="/tracks">Pistas</a>
         <a className="nav-item" href="/events">Coletores</a>
       </nav>
