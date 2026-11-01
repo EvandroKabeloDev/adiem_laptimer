@@ -623,14 +623,15 @@ export default function LiveTiming() {
                         <div style={{ background: "#171c22", borderRadius: 8, padding: 10 }}><div style={{ color: "#8e9aa7", fontSize: 11 }}>MÉDIA</div><div style={{ color: "#f4f6f8", fontSize: 19, fontWeight: 800 }}>{formatLapTime(average)}</div></div>
                       </div>
                       <div style={{ overflowX: "auto" }}>
-                        <table className="lap-table" style={{ minWidth: 360, width: "100%" }}>
-                          <thead><tr><th>#</th><th>Tempo</th><th>Dif. melhor</th><th>Passagem</th></tr></thead>
+                        <table className="lap-table" style={{ minWidth: 440, width: "100%" }}>
+                          <thead><tr><th>#</th><th>Tempo</th><th>Velocidade (km/h)</th><th>Dif. melhor</th><th>Passagem</th></tr></thead>
                           <tbody>
-                            {kartLaps.length === 0 ? <tr><td colSpan={4} className="empty-state">Aguardando passagem...</td></tr> : [...kartLaps].reverse().map((lap) => {
+                            {kartLaps.length === 0 ? <tr><td colSpan={5} className="empty-state">Aguardando passagem...</td></tr> : [...kartLaps].reverse().map((lap) => {
                               const diff = best ? lap.lap_time_ms - best.lap_time_ms : 0;
                               return <tr key={lap.id} className={lap.id === best?.id ? "best-row" : ""}>
                                 <td className="lap-number">{lap.lap_number}</td>
                                 <td className={lap.id === best?.id ? "lap-time best-time" : "lap-time"}>{formatLapTime(lap.lap_time_ms)}</td>
+                                <td>{formatSpeed(lap.lap_time_ms, trackLengthM)}</td>
                                 <td className={diff > 0 ? "delta negative" : "delta neutral"}>{diff === 0 ? "—" : `+${(diff / 1000).toFixed(3)}`}</td>
                                 <td>{formatClock(lap.end_at)}</td>
                               </tr>;

@@ -1,15 +1,17 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import NavigationShell from "@/components/navigation-shell";
 
 export const metadata: Metadata = {
   title: "ADIEM | Racing Live Timing",
+
   description:
     "ADIEM — Associação de Desenvolvimento e Incentivo de Esporte a Motor. Racing Live Timing.",
+
   icons: {
     icon: "/adiem-icon.png",
     apple: "/adiem-icon.png",
   },
+
   appleWebApp: {
     capable: true,
     title: "ADIEM Timing",
@@ -31,9 +33,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body>
-        <NavigationShell>{children}</NavigationShell>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

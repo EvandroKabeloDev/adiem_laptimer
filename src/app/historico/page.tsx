@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-type EventRow = { id: string; name: string | null };
+type EventRow = { id: string; name: string | null; track_id: string | null };
+type TrackRow = { id: string; name: string | null; length_m: number | string | null };
+type KartRow = { id: string; number: string | number | null; name: string | null };
 type SessionRow = {
   id: string;
   event_id: string | null;
@@ -11,7 +13,6 @@ type SessionRow = {
   started_at: string | null;
   finished_at: string | null;
 };
-type KartRow = { id: string; code: string | null; name: string | null };
 type TransponderRow = {
   transponder_id: number;
   kart_id: string | null;
@@ -56,6 +57,7 @@ export default function HistoricoPage() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [karts, setKarts] = useState<KartRow[]>([]);
+  const [tracks, setTracks] = useState<TrackRow[]>([]);
   const [transponders, setTransponders] = useState<TransponderRow[]>([]);
   const [pilots, setPilots] = useState<PilotRow[]>([]);
   const [laps, setLaps] = useState<LapRow[]>([]);
@@ -83,14 +85,15 @@ export default function HistoricoPage() {
       setLoading(true);
       setError("");
 
-      const [eventResult, sessionResult, kartResult, transponderResult, pilotResult] =
+      const [eventResult, sessionResult, kartResult, trackResult, transponderResult, pilotResult] =
         await Promise.all([
-          supabase.from("events").select("id,name").order("name"),
+          supabase.from("events").select("id,name,track_id").order("name"),
           supabase
             .from("rt004_sessions")
             .select("id,event_id,test_name,started_at,finished_at")
             .order("started_at", { ascending: false }),
-          supabase.from("rt004_karts").select("id,code,name").order("code"),
+          supabase.from("karts").select("id,number,name").order("number"),
+          supabase.from("tracks").select("id,name,length_m").order("name"),
           supabase
             .from("rt004_transponders")
             .select("transponder_id,kart_id,pilot_id,portal_kart_id")
@@ -119,6 +122,7 @@ export default function HistoricoPage() {
       }
 
       if (!kartResult.error) setKarts((kartResult.data || []) as KartRow[]);
+      if (!trackResult.error) setTracks((trackResult.data || []) as TrackRow[]);
       if (!transponderResult.error)
         setTransponders((transponderResult.data || []) as TransponderRow[]);
       if (!pilotResult.error) setPilots((pilotResult.data || []) as PilotRow[]);
@@ -210,11 +214,14 @@ export default function HistoricoPage() {
   const visibleLaps = useMemo(() => {
     return laps.filter((lap) => {
       if (transponderId && String(lap.transponder_id) !== transponderId) return false;
-      if (kartId && lap.kart_id !== kartId) return false;
+      if (kartId) {
+        const transponder = transponders.find((item) => item.transponder_id === lap.transponder_id);
+        if (transponder?.portal_kart_id !== kartId) return false;
+      }
       if (pilotTransponders && !pilotTransponders.has(String(lap.transponder_id))) return false;
       return true;
     });
-  }, [laps, transponderId, kartId, pilotTransponders]);
+  }, [laps, transponders, transponderId, kartId, pilotTransponders]);
 
   const bestLap = visibleLaps.reduce<number | null>((best, lap) => {
     if (lap.lap_time_ms == null) return best;
@@ -235,9 +242,25 @@ export default function HistoricoPage() {
   const selectedSession = sessions.find((session) => session.id === sessionId);
   const eventName = (id: string | null) =>
     events.find((event) => event.id === id)?.name || "Evento sem nome";
-  const kartLabel = (id: string | null) => {
-    const kart = karts.find((item) => item.id === id);
-    return kart ? `${kart.code || "Kart"}${kart.name ? ` — ${kart.name}` : ""}` : "Kart não identificado";
+  const kartLabel = (lap: LapRow) => {
+    const transponder = transponders.find((item) => item.transponder_id === lap.transponder_id);
+    const kart = transponder?.portal_kart_id
+      ? karts.find((item) => item.id === transponder.portal_kart_id)
+      : undefined;
+    if (kart) {
+      const number = kart.number == null ? "" : String(kart.number).trim();
+      const name = (kart.name || "").trim();
+      return number && name ? `${number} — ${name}` : name || (number ? `Kart ${number}` : "Kart cadastrado");
+    }
+    // Não exibe os códigos técnicos KART-X/KART-Y como se fossem nomes reais.
+    return "Kart sem associação";
+  };
+  const selectedEvent = events.find((event) => event.id === selectedSession?.event_id);
+  const selectedTrack = tracks.find((track) => track.id === selectedEvent?.track_id);
+  const trackLengthM = selectedTrack?.length_m == null ? null : Number(selectedTrack.length_m);
+  const formatSpeed = (lapTimeMs: number | null, lengthM: number | null) => {
+    if (lapTimeMs == null || lapTimeMs <= 0 || lengthM == null || !Number.isFinite(lengthM) || lengthM <= 0) return "—";
+    return ((lengthM / (lapTimeMs / 1000)) * 3.6).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   };
   const transponderLabel = (id: number | null) => (id == null ? "—" : `Transponder ${id}`);
 
@@ -310,7 +333,7 @@ export default function HistoricoPage() {
             <select style={styles.select} value={kartId} onChange={(e) => setKartId(e.target.value)}>
               <option value="">Todos os karts</option>
               {karts.map((kart) => (
-                <option key={kart.id} value={kart.id}>{kart.code || "Kart"}{kart.name ? ` — ${kart.name}` : ""}</option>
+                <option key={kart.id} value={kart.id}>{kart.number != null ? `Kart ${kart.number}` : "Kart"}{kart.name ? ` — ${kart.name}` : ""}</option>
               ))}
             </select>
           </label>
@@ -325,6 +348,12 @@ export default function HistoricoPage() {
             </select>
           </label>
         </div>
+        {selectedSession && (
+          <p style={styles.note}>
+            Pista: {selectedTrack?.name || "não informada"} · Extensão usada no cálculo: {trackLengthM != null && Number.isFinite(trackLengthM) && trackLengthM > 0 ? `${trackLengthM.toLocaleString("pt-BR")} m` : "metragem não cadastrada"}.
+            A velocidade média da volta é calculada por extensão da pista ÷ tempo da volta.
+          </p>
+        )}
         {pilotId && !transponders.some((t) => t.pilot_id === pilotId) && (
           <p style={styles.note}>
             Este piloto não está associado a um transponder em rt004_transponders. Não é possível atribuir voltas a ele com segurança até cadastrar esse vínculo.
@@ -383,6 +412,7 @@ export default function HistoricoPage() {
                   <th style={styles.th}>Tempo</th>
                   <th style={styles.th}>Transponder</th>
                   <th style={styles.th}>Kart</th>
+                  <th style={styles.th}>Velocidade média (km/h)</th>
                   <th style={styles.th}>Início</th>
                   <th style={styles.th}>Fim</th>
                 </tr>
@@ -396,7 +426,8 @@ export default function HistoricoPage() {
                       {lap.lap_time_ms != null && lap.lap_time_ms === bestLap && <span style={styles.bestBadge}>MELHOR</span>}
                     </td>
                     <td style={styles.td}>{transponderLabel(lap.transponder_id)}</td>
-                    <td style={styles.td}>{kartLabel(lap.kart_id)}</td>
+                    <td style={styles.td}>{kartLabel(lap)}</td>
+                    <td style={styles.td}>{formatSpeed(lap.lap_time_ms, trackLengthM)}</td>
                     <td style={styles.td}>{formatDate(lap.start_at)}</td>
                     <td style={styles.td}>{formatDate(lap.end_at)}</td>
                   </tr>
@@ -434,7 +465,7 @@ const styles: Record<string, CSSProperties> = {
   tableHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" },
   loading: { color: "#67e8f9", fontSize: 13 },
   tableWrap: { width: "100%", overflowX: "auto" },
-  table: { width: "100%", borderCollapse: "collapse", minWidth: 850, fontSize: 13 },
+  table: { width: "100%", borderCollapse: "collapse", minWidth: 980, fontSize: 13 },
   th: { textAlign: "left", padding: "12px 10px", color: "#94a3b8", borderBottom: "1px solid #334155", fontSize: 11, textTransform: "uppercase", letterSpacing: .6, whiteSpace: "nowrap" },
   td: { padding: "12px 10px", borderBottom: "1px solid #243247", whiteSpace: "nowrap", color: "#dbeafe" },
   timeCell: { fontWeight: 800, color: "#f8fafc" },
