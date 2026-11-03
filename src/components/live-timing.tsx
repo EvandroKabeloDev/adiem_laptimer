@@ -215,42 +215,18 @@ export default function LiveTiming() {
   }, []);
 
   async function loadData() {
-    // Usa o vínculo atual do transponder com o kart cadastrado no portal.
-    // Não usa mais rt004_karts (Kart X/Kart Y) como nome de exibição.
-    const [{ data: transponderRows, error: transponderError }, { data: kartRows, error: kartError }] = await Promise.all([
-      supabase
-        .from("rt004_transponders")
-        .select("transponder_id,portal_kart_id,active"),
-      supabase
-        .from("karts")
-        .select("id,number,name"),
-    ]);
-
-    if (!transponderError && !kartError && transponderRows && kartRows) {
-      const kartById = new Map(
-        (kartRows as Array<{ id: string; number: string | number | null; name: string | null }>)
-          .map((kart) => [kart.id, kart]),
-      );
+    // Os nomes dos karts vêm do cadastro do portal. A associação efetiva
+    // de cada volta é preservada em rt004_laps.portal_kart_id.
+    const { data: kartRows, error: kartError } = await supabase
+      .from("karts")
+      .select("id,number,name");
+    if (!kartError && kartRows) {
       const labels: Record<string, string> = {};
-
-      (transponderRows as Array<{
-        transponder_id: number | string;
-        portal_kart_id: string | null;
-        active: boolean;
-      }>).forEach((transponder) => {
-        if (!transponder.active || !transponder.portal_kart_id) return;
-
-        const kart = kartById.get(transponder.portal_kart_id);
-        if (!kart) return;
-
-        const kartNumber = kart.number == null ? "" : String(kart.number).trim();
-        const kartName = (kart.name ?? "").trim();
-        labels[String(transponder.transponder_id)] =
-          kartNumber && kartName
-            ? `${kartNumber} - ${kartName}`
-            : kartName || kartNumber || `Kart ${kart.id.slice(0, 8)}`;
+      (kartRows as Array<{ id: string; number: string | number | null; name: string | null }>).forEach((kart) => {
+        const number = kart.number == null ? "" : String(kart.number).trim();
+        const name = (kart.name ?? "").trim();
+        labels[kart.id] = number && name ? `${number} - ${name}` : name || number || `Kart ${kart.id.slice(0, 8)}`;
       });
-
       setKartLabels(labels);
     }
 
@@ -597,23 +573,25 @@ export default function LiveTiming() {
 
           <section className="panel" style={{ marginBottom: 16, padding: 16 }}>
             <div className="panel-title" style={{ marginBottom: 6 }}>Comparativo dos karts</div>
-            <p style={{ color: "#8e9aa7", fontSize: 12, margin: "0 0 14px" }}>Voltas agrupadas pelo transponder cadastrado. Os tempos antigos sem transponder associado não são atribuídos automaticamente.</p>
+            <p style={{ color: "#8e9aa7", fontSize: 12, margin: "0 0 14px" }}>Voltas agrupadas pelo kart efetivamente associado no instante da passagem. O mesmo transponder pode aparecer em karts diferentes após uma troca.</p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: 14 }}>
-              {[...new Set([...Object.keys(kartLabels), ...laps.map((lap) => String(lap.transponder_id ?? "sem-id"))])]
-                .sort((a, b) => Number(a) - Number(b))
-                .map((transponderId) => {
-                  const kartLaps = laps.filter((lap) => String(lap.transponder_id ?? "sem-id") === transponderId)
+              {[...new Set(laps.map((lap) => lap.portal_kart_id ? `kart:${lap.portal_kart_id}` : `legacy:${lap.transponder_id ?? "sem-id"}`))]
+                .sort()
+                .map((groupKey) => {
+                  const kartLaps = laps.filter((lap) => (lap.portal_kart_id ? `kart:${lap.portal_kart_id}` : `legacy:${lap.transponder_id ?? "sem-id"}`) === groupKey)
                     .sort((a, b) => a.lap_number - b.lap_number);
                   const best = kartLaps.reduce<Rt004Lap | null>((acc, lap) => !acc || lap.lap_time_ms < acc.lap_time_ms ? lap : acc, null);
                   const last = kartLaps[kartLaps.length - 1] ?? null;
                   const average = kartLaps.length ? kartLaps.reduce((sum, lap) => sum + lap.lap_time_ms, 0) / kartLaps.length : null;
-                  const label = transponderId === "sem-id" ? "Sem transponder" : (kartLabels[transponderId] || `Transponder ${transponderId}`);
+                  const kartId = groupKey.startsWith("kart:") ? groupKey.slice(5) : null;
+                  const label = kartId ? (kartLabels[kartId] || "Kart") : `Transponder ${last?.transponder_id ?? "não identificado"} (histórico legado)`;
+                  const transponderList = [...new Set(kartLaps.map(lap => String(lap.transponder_id ?? "?")))].join(", ");
                   return (
-                    <article key={transponderId} style={{ border: "1px solid #27313a", borderRadius: 12, padding: 14, background: "#0c1015", minWidth: 0 }}>
+                    <article key={groupKey} style={{ border: "1px solid #27313a", borderRadius: 12, padding: 14, background: "#0c1015", minWidth: 0 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 14 }}>
                         <div>
                           <div style={{ color: "#f4f6f8", fontSize: 18, fontWeight: 800 }}>{label}</div>
-                          <div style={{ color: "#8e9aa7", fontSize: 12 }}>Transponder: {transponderId === "sem-id" ? "não identificado" : `ID ${transponderId}`}</div>
+                          <div style={{ color: "#8e9aa7", fontSize: 12 }}>Transponder(s): {transponderList}</div>
                         </div>
                         <span style={{ background: "#15291f", color: "#40df93", borderRadius: 6, padding: "5px 8px", fontSize: 12, fontWeight: 700 }}>{kartLaps.length} voltas</span>
                       </div>
@@ -623,15 +601,14 @@ export default function LiveTiming() {
                         <div style={{ background: "#171c22", borderRadius: 8, padding: 10 }}><div style={{ color: "#8e9aa7", fontSize: 11 }}>MÉDIA</div><div style={{ color: "#f4f6f8", fontSize: 19, fontWeight: 800 }}>{formatLapTime(average)}</div></div>
                       </div>
                       <div style={{ overflowX: "auto" }}>
-                        <table className="lap-table" style={{ minWidth: 440, width: "100%" }}>
-                          <thead><tr><th>#</th><th>Tempo</th><th>Velocidade (km/h)</th><th>Dif. melhor</th><th>Passagem</th></tr></thead>
+                        <table className="lap-table" style={{ minWidth: 360, width: "100%" }}>
+                          <thead><tr><th>#</th><th>Tempo</th><th>Dif. melhor</th><th>Passagem</th></tr></thead>
                           <tbody>
-                            {kartLaps.length === 0 ? <tr><td colSpan={5} className="empty-state">Aguardando passagem...</td></tr> : [...kartLaps].reverse().map((lap) => {
+                            {kartLaps.length === 0 ? <tr><td colSpan={4} className="empty-state">Aguardando passagem...</td></tr> : [...kartLaps].reverse().map((lap) => {
                               const diff = best ? lap.lap_time_ms - best.lap_time_ms : 0;
                               return <tr key={lap.id} className={lap.id === best?.id ? "best-row" : ""}>
                                 <td className="lap-number">{lap.lap_number}</td>
                                 <td className={lap.id === best?.id ? "lap-time best-time" : "lap-time"}>{formatLapTime(lap.lap_time_ms)}</td>
-                                <td>{formatSpeed(lap.lap_time_ms, trackLengthM)}</td>
                                 <td className={diff > 0 ? "delta negative" : "delta neutral"}>{diff === 0 ? "—" : `+${(diff / 1000).toFixed(3)}`}</td>
                                 <td>{formatClock(lap.end_at)}</td>
                               </tr>;
@@ -642,7 +619,7 @@ export default function LiveTiming() {
                     </article>
                   );
                 })}
-              {Object.keys(kartLabels).length === 0 && laps.length === 0 ? <div className="empty-state" style={{ padding: 24 }}>Aguardando voltas dos transponders cadastrados...</div> : null}
+              {laps.length === 0 ? <div className="empty-state" style={{ padding: 24 }}>Aguardando voltas dos transponders associados a esta sessão...</div> : null}
             </div>
           </section>
 
