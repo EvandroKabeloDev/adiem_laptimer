@@ -19,12 +19,15 @@ type TransponderRow = {
   pilot_id: string | null;
   portal_kart_id: string | null;
 };
-type PilotRow = { id: string; name: string | null };
+type PilotRow = { id: string; first_name: string; last_name: string };
+type AssignmentRow = { id: string; transponder_id: number; rt004_kart_id: string | null; portal_kart_id: string; pilot_id: string | null; started_at: string; ended_at: string | null };
 type LapRow = {
   id: number | string;
   session_id: string;
   transponder_id: number | null;
   kart_id: string | null;
+  portal_kart_id: string | null;
+  session_transponder_id: string | null;
   lap_number: number | null;
   lap_time_ms: number | null;
   start_at: string | null;
@@ -61,6 +64,7 @@ export default function HistoricoPage() {
   const [transponders, setTransponders] = useState<TransponderRow[]>([]);
   const [pilots, setPilots] = useState<PilotRow[]>([]);
   const [laps, setLaps] = useState<LapRow[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
   const [eventId, setEventId] = useState("");
   const [sessionId, setSessionId] = useState("");
   const [transponderId, setTransponderId] = useState("");
@@ -98,7 +102,7 @@ export default function HistoricoPage() {
             .from("rt004_transponders")
             .select("transponder_id,kart_id,pilot_id,portal_kart_id")
             .order("transponder_id"),
-          supabase.from("pilots").select("id,name").order("name"),
+          supabase.from("pilots").select("id,first_name,last_name").order("first_name"),
         ]);
 
       if (cancelled) return;
@@ -155,6 +159,7 @@ export default function HistoricoPage() {
     async function loadLaps() {
       if (!supabase || !sessionId) {
         setLaps([]);
+        setAssignments([]);
         return;
       }
       setLoadingLaps(true);
@@ -169,7 +174,7 @@ export default function HistoricoPage() {
         const result = await supabase
           .from("rt004_laps")
           .select(
-            "id,session_id,transponder_id,kart_id,lap_number,lap_time_ms,start_at,end_at"
+            "id,session_id,transponder_id,kart_id,portal_kart_id,session_transponder_id,lap_number,lap_time_ms,start_at,end_at"
           )
           .eq("session_id", sessionId)
           .order("start_at", { ascending: true })
@@ -190,8 +195,20 @@ export default function HistoricoPage() {
         offset += pageSize;
       }
 
+      const assignmentResult = await supabase
+        .from("rt004_session_transponders")
+        .select("id,transponder_id,rt004_kart_id,portal_kart_id,pilot_id,started_at,ended_at")
+        .eq("session_id", sessionId)
+        .order("started_at", { ascending: true });
+
       if (!cancelled) {
         setLaps(allRows);
+        if (assignmentResult.error) {
+          setAssignments([]);
+          setError(`Voltas carregadas, mas não foi possível carregar as associações temporais: ${assignmentResult.error.message}`);
+        } else {
+          setAssignments((assignmentResult.data || []) as AssignmentRow[]);
+        }
         setLoadingLaps(false);
       }
     }
@@ -202,26 +219,61 @@ export default function HistoricoPage() {
     };
   }, [supabase, sessionId]);
 
-  const pilotTransponders = useMemo(() => {
-    if (!pilotId) return null;
-    return new Set(
-      transponders
-        .filter((t) => t.pilot_id === pilotId)
-        .map((t) => String(t.transponder_id))
-    );
-  }, [transponders, pilotId]);
+  const assignmentForLap = (lap: LapRow) => {
+    if (lap.session_transponder_id) {
+      const exact = assignments.find((a) => a.id === lap.session_transponder_id);
+      if (exact) return exact;
+    }
+    const passageTimestamp = lap.end_at || lap.start_at;
+    const passageAt = passageTimestamp ? new Date(passageTimestamp).getTime() : NaN;
+    if (Number.isFinite(passageAt)) {
+      const temporal = assignments.find((a) =>
+        a.transponder_id === lap.transponder_id &&
+        new Date(a.started_at).getTime() <= passageAt &&
+        (a.ended_at == null || new Date(a.ended_at).getTime() > passageAt)
+      );
+      if (temporal) return temporal;
+    }
+    return null;
+  };
+
+  const lapKartId = (lap: LapRow) => {
+    const assignment = assignmentForLap(lap);
+    return lap.portal_kart_id || assignment?.portal_kart_id ||
+      transponders.find((item) => item.transponder_id === lap.transponder_id)?.portal_kart_id || null;
+  };
+
+  const lapPilotId = (lap: LapRow) => {
+    const assignment = assignmentForLap(lap);
+    return assignment?.pilot_id ||
+      transponders.find((item) => item.transponder_id === lap.transponder_id)?.pilot_id || null;
+  };
 
   const visibleLaps = useMemo(() => {
+    const resolveAssignment = (lap: LapRow) => {
+      if (lap.session_transponder_id) {
+        const exact = assignments.find((a) => a.id === lap.session_transponder_id);
+        if (exact) return exact;
+      }
+      const timestamp = lap.end_at || lap.start_at;
+      const passageAt = timestamp ? new Date(timestamp).getTime() : NaN;
+      return Number.isFinite(passageAt) ? assignments.find((a) =>
+        a.transponder_id === lap.transponder_id &&
+        new Date(a.started_at).getTime() <= passageAt &&
+        (a.ended_at == null || new Date(a.ended_at).getTime() > passageAt)
+      ) ?? null : null;
+    };
     return laps.filter((lap) => {
       if (transponderId && String(lap.transponder_id) !== transponderId) return false;
-      if (kartId) {
-        const transponder = transponders.find((item) => item.transponder_id === lap.transponder_id);
-        if (transponder?.portal_kart_id !== kartId) return false;
-      }
-      if (pilotTransponders && !pilotTransponders.has(String(lap.transponder_id))) return false;
+      const assignment = resolveAssignment(lap);
+      const globalTransponder = transponders.find((item) => item.transponder_id === lap.transponder_id);
+      const effectiveKartId = lap.portal_kart_id || assignment?.portal_kart_id || globalTransponder?.portal_kart_id || null;
+      const effectivePilotId = assignment?.pilot_id || globalTransponder?.pilot_id || null;
+      if (kartId && effectiveKartId !== kartId) return false;
+      if (pilotId && effectivePilotId !== pilotId) return false;
       return true;
     });
-  }, [laps, transponders, transponderId, kartId, pilotTransponders]);
+  }, [laps, assignments, transponders, transponderId, kartId, pilotId]);
 
   const bestLap = visibleLaps.reduce<number | null>((best, lap) => {
     if (lap.lap_time_ms == null) return best;
@@ -243,17 +295,19 @@ export default function HistoricoPage() {
   const eventName = (id: string | null) =>
     events.find((event) => event.id === id)?.name || "Evento sem nome";
   const kartLabel = (lap: LapRow) => {
-    const transponder = transponders.find((item) => item.transponder_id === lap.transponder_id);
-    const kart = transponder?.portal_kart_id
-      ? karts.find((item) => item.id === transponder.portal_kart_id)
-      : undefined;
+    const id = lapKartId(lap);
+    const kart = id ? karts.find((item) => item.id === id) : undefined;
     if (kart) {
       const number = kart.number == null ? "" : String(kart.number).trim();
       const name = (kart.name || "").trim();
       return number && name ? `${number} — ${name}` : name || (number ? `Kart ${number}` : "Kart cadastrado");
     }
-    // Não exibe os códigos técnicos KART-X/KART-Y como se fossem nomes reais.
     return "Kart sem associação";
+  };
+  const pilotLabel = (lap: LapRow) => {
+    const id = lapPilotId(lap);
+    const pilot = id ? pilots.find((item) => item.id === id) : undefined;
+    return pilot ? `${pilot.first_name} ${pilot.last_name}`.trim() : "Piloto não informado";
   };
   const selectedEvent = events.find((event) => event.id === selectedSession?.event_id);
   const selectedTrack = tracks.find((track) => track.id === selectedEvent?.track_id);
@@ -343,7 +397,7 @@ export default function HistoricoPage() {
             <select style={styles.select} value={pilotId} onChange={(e) => setPilotId(e.target.value)}>
               <option value="">Todos os pilotos</option>
               {pilots.map((pilot) => (
-                <option key={pilot.id} value={pilot.id}>{pilot.name || pilot.id}</option>
+                <option key={pilot.id} value={pilot.id}>{`${pilot.first_name} ${pilot.last_name}`.trim()}</option>
               ))}
             </select>
           </label>
@@ -352,11 +406,6 @@ export default function HistoricoPage() {
           <p style={styles.note}>
             Pista: {selectedTrack?.name || "não informada"} · Extensão usada no cálculo: {trackLengthM != null && Number.isFinite(trackLengthM) && trackLengthM > 0 ? `${trackLengthM.toLocaleString("pt-BR")} m` : "metragem não cadastrada"}.
             A velocidade média da volta é calculada por extensão da pista ÷ tempo da volta.
-          </p>
-        )}
-        {pilotId && !transponders.some((t) => t.pilot_id === pilotId) && (
-          <p style={styles.note}>
-            Este piloto não está associado a um transponder em rt004_transponders. Não é possível atribuir voltas a ele com segurança até cadastrar esse vínculo.
           </p>
         )}
       </section>
@@ -412,6 +461,7 @@ export default function HistoricoPage() {
                   <th style={styles.th}>Tempo</th>
                   <th style={styles.th}>Transponder</th>
                   <th style={styles.th}>Kart</th>
+                  <th style={styles.th}>Piloto</th>
                   <th style={styles.th}>Velocidade média (km/h)</th>
                   <th style={styles.th}>Início</th>
                   <th style={styles.th}>Fim</th>
@@ -427,6 +477,7 @@ export default function HistoricoPage() {
                     </td>
                     <td style={styles.td}>{transponderLabel(lap.transponder_id)}</td>
                     <td style={styles.td}>{kartLabel(lap)}</td>
+                    <td style={styles.td}>{pilotLabel(lap)}</td>
                     <td style={styles.td}>{formatSpeed(lap.lap_time_ms, trackLengthM)}</td>
                     <td style={styles.td}>{formatDate(lap.start_at)}</td>
                     <td style={styles.td}>{formatDate(lap.end_at)}</td>
@@ -465,7 +516,7 @@ const styles: Record<string, CSSProperties> = {
   tableHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" },
   loading: { color: "#67e8f9", fontSize: 13 },
   tableWrap: { width: "100%", overflowX: "auto" },
-  table: { width: "100%", borderCollapse: "collapse", minWidth: 980, fontSize: 13 },
+  table: { width: "100%", borderCollapse: "collapse", minWidth: 1080, fontSize: 13 },
   th: { textAlign: "left", padding: "12px 10px", color: "#94a3b8", borderBottom: "1px solid #334155", fontSize: 11, textTransform: "uppercase", letterSpacing: .6, whiteSpace: "nowrap" },
   td: { padding: "12px 10px", borderBottom: "1px solid #243247", whiteSpace: "nowrap", color: "#dbeafe" },
   timeCell: { fontWeight: 800, color: "#f8fafc" },

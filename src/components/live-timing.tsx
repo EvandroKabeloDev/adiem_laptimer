@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Rt004Lap, Rt004Session } from "@/types/timing";
+import SessionAssignments from "@/components/session-assignments";
 
 function formatLapTime(ms: number | null | undefined) {
   if (ms == null) return "--:---";
@@ -570,6 +571,8 @@ export default function LiveTiming() {
               </div>
             ) : null}
           </section>
+
+          <SessionAssignments sessionId={session?.id ?? null} active={isSessionActive} />
 
           <section className="panel" style={{ marginBottom: 16, padding: 16 }}>
             <div className="panel-title" style={{ marginBottom: 6 }}>Comparativo dos karts</div>
