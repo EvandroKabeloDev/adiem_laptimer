@@ -14,6 +14,8 @@ export type Rt004Lap = {
   session_id: string;
   transponder_id?: number | string | null;
   kart_id?: string | null;
+  portal_kart_id?: string | null;
+  session_transponder_id?: string | null;
   lap_number: number;
   start_packet_id: number | null;
   end_packet_id: number | null;
