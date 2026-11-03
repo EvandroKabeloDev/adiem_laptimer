@@ -93,6 +93,7 @@ export default function LiveTiming() {
   const [selectedEventId, setSelectedEventId] = useState("");
   const [sessionAction, setSessionAction] = useState<"starting" | "ending" | null>(null);
   const [sessionMessage, setSessionMessage] = useState("");
+  const [connectionCollapsed, setConnectionCollapsed] = useState(false);
   const sessionIdRef = useRef<string | null>(null);
 
   const selectedEvent = events.find((event) => event.id === selectedEventId) ?? null;
@@ -415,26 +416,38 @@ export default function LiveTiming() {
 
       <section className="dashboard-grid">
         <aside className="sidebar">
-          <section className="panel connection-panel">
+          <section className={`panel connection-panel${connectionCollapsed ? " connection-panel--collapsed" : ""}`}>
             <div className="panel-title-row">
               <div className="panel-title">
                 <Icon>⌁</Icon>
                 Conexão do Sistema
               </div>
-
-              <span
-                className={
-                  realtimeStatus === "ONLINE"
-                    ? "connected-pill"
-                    : realtimeStatus === "CONNECTING"
+              <div className="connection-actions">
+                <span
+                  className={
+                    realtimeStatus === "ONLINE"
                       ? "connected-pill"
-                      : "offline-pill"
-                }
-              >
-                {realtimeStatus === "ONLINE" ? "Conectado" : realtimeStatus === "CONNECTING" ? "Conectando" : "Offline"}
-              </span>
+                      : realtimeStatus === "CONNECTING"
+                        ? "connected-pill"
+                        : "offline-pill"
+                  }
+                >
+                  {realtimeStatus === "ONLINE" ? "Conectado" : realtimeStatus === "CONNECTING" ? "Conectando" : "Offline"}
+                </span>
+                <button
+                  type="button"
+                  className="connection-toggle"
+                  onClick={() => setConnectionCollapsed((value) => !value)}
+                  aria-expanded={!connectionCollapsed}
+                  aria-label={connectionCollapsed ? "Expandir conexão do sistema" : "Minimizar conexão do sistema"}
+                  title={connectionCollapsed ? "Expandir conexão" : "Minimizar conexão"}
+                >
+                  {connectionCollapsed ? "+" : "−"}
+                </button>
+              </div>
             </div>
 
+            {!connectionCollapsed && <>
             <div className="connection-icon">◉</div>
 
             <InfoRow
@@ -480,6 +493,7 @@ export default function LiveTiming() {
               label="Voltas recebidas"
               value={String(laps.length)}
             />
+            </>}
           </section>
 
           <section className="panel session-panel">
@@ -577,7 +591,7 @@ export default function LiveTiming() {
           <section className="panel" style={{ marginBottom: 16, padding: 16 }}>
             <div className="panel-title" style={{ marginBottom: 6 }}>Comparativo dos karts</div>
             <p style={{ color: "#8e9aa7", fontSize: 12, margin: "0 0 14px" }}>Voltas agrupadas pelo kart efetivamente associado no instante da passagem. O mesmo transponder pode aparecer em karts diferentes após uma troca.</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 360px), 1fr))", gap: 14 }}>
+            <div className="transponder-cards-grid">
               {[...new Set(laps.map((lap) => lap.portal_kart_id ? `kart:${lap.portal_kart_id}` : `unassigned:${lap.transponder_id ?? "sem-id"}`))]
                 .sort()
                 .map((groupKey) => {
@@ -590,10 +604,10 @@ export default function LiveTiming() {
                   const label = kartId ? (kartLabels[kartId] || "Kart") : `Transponder ${last?.transponder_id ?? "não identificado"} — sem kart associado`;
                   const transponderList = [...new Set(kartLaps.map(lap => String(lap.transponder_id ?? "?")))].join(", ");
                   return (
-                    <article key={groupKey} style={{ border: "1px solid #27313a", borderRadius: 12, padding: 14, background: "#0c1015", minWidth: 0 }}>
+                    <article key={groupKey} className="transponder-card">
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 14 }}>
                         <div>
-                          <div style={{ color: "#f4f6f8", fontSize: 18, fontWeight: 800 }}>{label}</div>
+                          <div className="transponder-card-title">{label}</div>
                           <div style={{ color: "#8e9aa7", fontSize: 12 }}>Transponder(s): {transponderList}</div>
                         </div>
                         <span style={{ background: "#15291f", color: "#40df93", borderRadius: 6, padding: "5px 8px", fontSize: 12, fontWeight: 700 }}>{kartLaps.length} voltas</span>
@@ -603,8 +617,8 @@ export default function LiveTiming() {
                         <div style={{ background: "#171c22", borderRadius: 8, padding: 10 }}><div style={{ color: "#8e9aa7", fontSize: 11 }}>ÚLTIMA</div><div style={{ color: "#f4f6f8", fontSize: 19, fontWeight: 800 }}>{formatLapTime(last?.lap_time_ms)}</div></div>
                         <div style={{ background: "#171c22", borderRadius: 8, padding: 10 }}><div style={{ color: "#8e9aa7", fontSize: 11 }}>MÉDIA</div><div style={{ color: "#f4f6f8", fontSize: 19, fontWeight: 800 }}>{formatLapTime(average)}</div></div>
                       </div>
-                      <div style={{ overflowX: "auto" }}>
-                        <table className="lap-table" style={{ minWidth: 360, width: "100%" }}>
+                      <div className="transponder-laps">
+                        <table className="lap-table transponder-lap-table">
                           <thead><tr><th>#</th><th>Tempo</th><th>Dif. melhor</th><th>Passagem</th></tr></thead>
                           <tbody>
                             {kartLaps.length === 0 ? <tr><td colSpan={4} className="empty-state">Aguardando passagem...</td></tr> : [...kartLaps].reverse().map((lap) => {
